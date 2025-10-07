@@ -1,98 +1,93 @@
-import { JobDescription, ResumeData, AnalysisResult, OptimizedResume, UserProfile } from './types';
+import { JobDescription, ResumeData, AnalysisResult, OptimizedResume } from './types';
 
-const STORAGE_KEYS = {
-  JOBS: 'resume-analyzer-jobs',
-  RESUMES: 'resume-analyzer-resumes',
-  ANALYSES: 'resume-analyzer-analyses',
-  OPTIMIZED_RESUMES: 'resume-analyzer-optimized',
-  USER_PROFILE: 'resume-analyzer-profile'
+export const generateId = (): string => {
+  return Date.now().toString(36) + Math.random().toString(36).substr(2);
 };
 
 // Job Description Storage
 export const saveJobDescription = (job: JobDescription): void => {
   const jobs = getJobDescriptions();
-  const updatedJobs = [...jobs.filter(j => j.id !== job.id), job];
-  localStorage.setItem(STORAGE_KEYS.JOBS, JSON.stringify(updatedJobs));
+  jobs.push(job);
+  localStorage.setItem('resume_analyzer_jobs', JSON.stringify(jobs));
 };
 
 export const getJobDescriptions = (): JobDescription[] => {
-  if (typeof window === 'undefined') return [];
-  const stored = localStorage.getItem(STORAGE_KEYS.JOBS);
-  return stored ? JSON.parse(stored) : [];
-};
-
-export const getJobById = (id: string): JobDescription | null => {
-  const jobs = getJobDescriptions();
-  return jobs.find(job => job.id === id) || null;
+  const stored = localStorage.getItem('resume_analyzer_jobs');
+  if (!stored) return [];
+  
+  try {
+    const jobs = JSON.parse(stored);
+    return jobs.map((job: any) => ({
+      ...job,
+      createdAt: new Date(job.createdAt)
+    }));
+  } catch {
+    return [];
+  }
 };
 
 // Resume Storage
 export const saveResume = (resume: ResumeData): void => {
   const resumes = getResumes();
-  const updatedResumes = [...resumes.filter(r => r.id !== resume.id), resume];
-  localStorage.setItem(STORAGE_KEYS.RESUMES, JSON.stringify(updatedResumes));
+  resumes.push(resume);
+  localStorage.setItem('resume_analyzer_resumes', JSON.stringify(resumes));
 };
 
 export const getResumes = (): ResumeData[] => {
-  if (typeof window === 'undefined') return [];
-  const stored = localStorage.getItem(STORAGE_KEYS.RESUMES);
-  return stored ? JSON.parse(stored) : [];
-};
-
-export const getResumeById = (id: string): ResumeData | null => {
-  const resumes = getResumes();
-  return resumes.find(resume => resume.id === id) || null;
+  const stored = localStorage.getItem('resume_analyzer_resumes');
+  if (!stored) return [];
+  
+  try {
+    const resumes = JSON.parse(stored);
+    return resumes.map((resume: any) => ({
+      ...resume,
+      uploadedAt: new Date(resume.uploadedAt)
+    }));
+  } catch {
+    return [];
+  }
 };
 
 // Analysis Storage
 export const saveAnalysis = (analysis: AnalysisResult): void => {
   const analyses = getAnalyses();
-  const updatedAnalyses = [...analyses.filter(a => a.id !== analysis.id), analysis];
-  localStorage.setItem(STORAGE_KEYS.ANALYSES, JSON.stringify(updatedAnalyses));
+  analyses.push(analysis);
+  localStorage.setItem('resume_analyzer_analyses', JSON.stringify(analyses));
 };
 
 export const getAnalyses = (): AnalysisResult[] => {
-  if (typeof window === 'undefined') return [];
-  const stored = localStorage.getItem(STORAGE_KEYS.ANALYSES);
-  return stored ? JSON.parse(stored) : [];
-};
-
-export const getAnalysisById = (id: string): AnalysisResult | null => {
-  const analyses = getAnalyses();
-  return analyses.find(analysis => analysis.id === id) || null;
+  const stored = localStorage.getItem('resume_analyzer_analyses');
+  if (!stored) return [];
+  
+  try {
+    const analyses = JSON.parse(stored);
+    return analyses.map((analysis: any) => ({
+      ...analysis,
+      createdAt: new Date(analysis.createdAt)
+    }));
+  } catch {
+    return [];
+  }
 };
 
 // Optimized Resume Storage
 export const saveOptimizedResume = (resume: OptimizedResume): void => {
   const resumes = getOptimizedResumes();
-  const updatedResumes = [...resumes.filter(r => r.id !== resume.id), resume];
-  localStorage.setItem(STORAGE_KEYS.OPTIMIZED_RESUMES, JSON.stringify(updatedResumes));
+  resumes.push(resume);
+  localStorage.setItem('resume_analyzer_optimized', JSON.stringify(resumes));
 };
 
 export const getOptimizedResumes = (): OptimizedResume[] => {
-  if (typeof window === 'undefined') return [];
-  const stored = localStorage.getItem(STORAGE_KEYS.OPTIMIZED_RESUMES);
-  return stored ? JSON.parse(stored) : [];
-};
-
-// User Profile Storage
-export const saveUserProfile = (profile: UserProfile): void => {
-  localStorage.setItem(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
-};
-
-export const getUserProfile = (): UserProfile | null => {
-  if (typeof window === 'undefined') return null;
-  const stored = localStorage.getItem(STORAGE_KEYS.USER_PROFILE);
-  return stored ? JSON.parse(stored) : null;
-};
-
-// Utility functions
-export const generateId = (): string => {
-  return Date.now().toString(36) + Math.random().toString(36).substr(2);
-};
-
-export const clearAllData = (): void => {
-  Object.values(STORAGE_KEYS).forEach(key => {
-    localStorage.removeItem(key);
-  });
+  const stored = localStorage.getItem('resume_analyzer_optimized');
+  if (!stored) return [];
+  
+  try {
+    const resumes = JSON.parse(stored);
+    return resumes.map((resume: any) => ({
+      ...resume,
+      createdAt: new Date(resume.createdAt)
+    }));
+  } catch {
+    return [];
+  }
 };
