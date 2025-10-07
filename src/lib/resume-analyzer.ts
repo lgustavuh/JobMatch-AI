@@ -1,193 +1,174 @@
 import { JobDescription, ResumeData, AnalysisResult } from './types';
+import { generateId } from './storage';
 
-// Simulated AI analysis - In a real app, this would call an AI service
-export const analyzeResumeCompatibility = async (
-  resume: ResumeData,
-  job: JobDescription
-): Promise<AnalysisResult> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
-
-  const resumeText = resume.extractedText.toLowerCase();
-  const jobRequirements = job.requirements.join(' ').toLowerCase();
-  const jobSkills = job.skills.join(' ').toLowerCase();
-  const jobDescription = job.description.toLowerCase();
-
-  // Calculate compatibility score based on keyword matching
-  const allJobKeywords = [...job.requirements, ...job.skills, job.title]
-    .join(' ')
-    .toLowerCase()
-    .split(/\s+/)
-    .filter(word => word.length > 3);
-
-  const uniqueKeywords = [...new Set(allJobKeywords)];
-  const matchedKeywords = uniqueKeywords.filter(keyword => 
-    resumeText.includes(keyword)
-  );
-
-  const compatibilityScore = Math.min(
-    Math.round((matchedKeywords.length / uniqueKeywords.length) * 100),
-    95
-  );
-
-  // Generate strengths based on matched keywords
-  const strengths = [
-    ...matchedKeywords.slice(0, 5).map(keyword => 
-      `Experiência relevante em ${keyword}`
-    ),
-    'Perfil alinhado com os requisitos da vaga',
-    'Histórico profissional consistente'
-  ].slice(0, 4);
-
-  // Generate weaknesses based on missing keywords
-  const missingKeywords = uniqueKeywords.filter(keyword => 
-    !resumeText.includes(keyword)
-  );
-
-  const weaknesses = [
-    ...missingKeywords.slice(0, 3).map(keyword => 
-      `Falta evidência de experiência em ${keyword}`
-    ),
-    'Algumas competências técnicas poderiam ser mais detalhadas',
-    'Objetivos profissionais poderiam ser mais específicos'
-  ].slice(0, 4);
-
-  // Generate improvement suggestions
-  const improvements = [
-    'Adicione mais detalhes sobre projetos específicos',
-    'Inclua métricas e resultados quantificáveis',
-    'Destaque certificações relevantes',
-    'Personalize o resumo profissional para a vaga',
-    'Adicione palavras-chave específicas da área'
-  ].slice(0, 5);
-
-  return {
-    id: Date.now().toString(),
-    jobId: job.id,
-    resumeId: resume.id,
-    compatibilityScore,
-    strengths,
-    weaknesses,
-    improvements,
-    missingSkills: missingKeywords.slice(0, 5),
-    analyzedAt: new Date()
-  };
-};
-
-// Extract text from file (simplified version)
+// Simular extração de texto de arquivo
 export const extractTextFromFile = async (file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      
-      if (file.type === 'application/pdf') {
-        // In a real app, you'd use a PDF parsing library
-        resolve(`[PDF Content] ${file.name} - Conteúdo extraído do PDF. Em uma implementação real, seria usado uma biblioteca como PDF.js para extrair o texto completo.`);
-      } else if (file.type.includes('document') || file.type.includes('word')) {
-        // In a real app, you'd use a DOCX parsing library
-        resolve(`[DOCX Content] ${file.name} - Conteúdo extraído do DOCX. Em uma implementação real, seria usado uma biblioteca como mammoth.js para extrair o texto completo.`);
-      } else {
-        resolve(result);
-      }
-    };
-    
-    reader.onerror = () => reject(new Error('Erro ao ler o arquivo'));
-    reader.readAsText(file);
+  return new Promise((resolve) => {
+    // Simulação de extração de texto
+    setTimeout(() => {
+      resolve(`Texto extraído do arquivo: ${file.name}\n\nEste é um exemplo de texto extraído de um currículo. Em uma implementação real, aqui seria usado uma biblioteca como PDF.js ou similar para extrair o texto real do arquivo.`);
+    }, 1000);
   });
 };
 
-// Parse job description from URL or text
+// Simular parsing de descrição de vaga
 export const parseJobDescription = async (input: string): Promise<Partial<JobDescription>> => {
-  // Simulate API delay
-  await new Promise(resolve => setTimeout(resolve, 1500));
-
-  const isUrl = input.startsWith('http');
-  
-  if (isUrl) {
-    // In a real app, you'd scrape the job posting
-    return {
-      title: 'Desenvolvedor Full Stack',
-      company: 'Tech Company',
-      description: 'Estamos procurando um desenvolvedor full stack experiente para se juntar à nossa equipe. O candidato ideal terá experiência em desenvolvimento web moderno e será responsável por criar aplicações escaláveis.',
-      requirements: [
-        'Experiência com React e Node.js',
-        'Conhecimento em bancos de dados SQL',
-        'Experiência com Git e metodologias ágeis',
-        'Inglês intermediário'
-      ],
-      skills: ['React', 'Node.js', 'JavaScript', 'TypeScript', 'SQL', 'Git'],
-      url: input
-    };
-  } else {
-    // Parse text description
-    const lines = input.split('\n').filter(line => line.trim());
-    const title = lines[0] || 'Vaga de Emprego';
-    const company = lines[1] || 'Empresa';
-    
-    // Extract skills and requirements (simplified)
-    const commonSkills = ['JavaScript', 'React', 'Node.js', 'Python', 'Java', 'SQL', 'Git', 'AWS', 'Docker'];
-    const foundSkills = commonSkills.filter(skill => 
-      input.toLowerCase().includes(skill.toLowerCase())
-    );
-    
-    return {
-      title,
-      company,
-      description: input,
-      requirements: [
-        'Experiência na área',
-        'Conhecimento técnico relevante',
-        'Boa comunicação',
-        'Trabalho em equipe'
-      ],
-      skills: foundSkills.length > 0 ? foundSkills : ['Habilidades técnicas', 'Comunicação']
-    };
-  }
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      // Se for uma URL, simular extração de dados
+      if (input.startsWith('http')) {
+        resolve({
+          title: 'Desenvolvedor Full Stack',
+          company: 'Empresa Tech',
+          description: 'Vaga para desenvolvedor full stack com experiência em React, Node.js e bancos de dados. Conhecimento em TypeScript é um diferencial.',
+          requirements: [
+            'Experiência com React',
+            'Conhecimento em Node.js',
+            'Experiência com bancos de dados',
+            'Conhecimento em Git'
+          ],
+          skills: ['React', 'Node.js', 'JavaScript', 'TypeScript', 'SQL', 'Git'],
+          url: input
+        });
+      } else {
+        // Parse do texto da descrição
+        const skills = extractSkillsFromText(input);
+        const requirements = extractRequirementsFromText(input);
+        
+        resolve({
+          title: 'Vaga de Emprego',
+          company: 'Empresa',
+          description: input,
+          requirements,
+          skills
+        });
+      }
+    }, 1500);
+  });
 };
 
-// Generate optimized resume content
+// Analisar compatibilidade entre currículo e vaga
+export const analyzeResumeCompatibility = async (
+  resume: ResumeData, 
+  job: JobDescription
+): Promise<AnalysisResult> => {
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      // Simulação de análise de compatibilidade
+      const resumeText = resume.extractedText.toLowerCase();
+      const jobSkills = job.skills.map(skill => skill.toLowerCase());
+      
+      // Calcular score baseado em skills encontradas
+      const foundSkills = jobSkills.filter(skill => 
+        resumeText.includes(skill)
+      );
+      
+      const compatibilityScore = Math.min(
+        Math.round((foundSkills.length / jobSkills.length) * 100),
+        95
+      );
+      
+      const strengths = [
+        'Experiência relevante na área',
+        'Formação adequada para a posição',
+        'Histórico profissional consistente'
+      ];
+      
+      const weaknesses = [
+        'Algumas habilidades técnicas podem ser aprimoradas',
+        'Experiência com ferramentas específicas da vaga',
+        'Certificações relevantes para a área'
+      ];
+      
+      const improvements = [
+        'Destacar mais as experiências com as tecnologias mencionadas na vaga',
+        'Incluir projetos que demonstrem as habilidades requeridas',
+        'Adicionar palavras-chave específicas da descrição da vaga',
+        'Quantificar resultados e conquistas profissionais'
+      ];
+      
+      resolve({
+        id: generateId(),
+        resumeId: resume.id,
+        jobId: job.id,
+        compatibilityScore,
+        strengths,
+        weaknesses,
+        improvements,
+        createdAt: new Date()
+      });
+    }, 2000);
+  });
+};
+
+// Gerar currículo otimizado
 export const generateOptimizedResume = async (
-  originalResume: ResumeData,
+  resume: ResumeData,
   job: JobDescription,
   analysis: AnalysisResult
 ): Promise<string> => {
-  // Simulate AI processing
-  await new Promise(resolve => setTimeout(resolve, 3000));
+  return new Promise((resolve) => {
+    setTimeout(() => {
+      const optimizedContent = `
+CURRÍCULO OTIMIZADO PARA: ${job.title}
 
-  const optimizedContent = `
-CURRÍCULO OTIMIZADO PARA: ${job.title} - ${job.company}
+=== INFORMAÇÕES PESSOAIS ===
+Nome: [Seu Nome]
+Email: [seu.email@exemplo.com]
+Telefone: [seu telefone]
+LinkedIn: [seu perfil]
 
 === RESUMO PROFISSIONAL ===
-Profissional experiente com foco em ${job.skills.slice(0, 3).join(', ')} e forte alinhamento com os requisitos da posição. Histórico comprovado de entrega de resultados e adaptabilidade às necessidades do mercado.
+Profissional com experiência em desenvolvimento de software, especializado em ${job.skills.slice(0, 3).join(', ')}. 
+Busco oportunidade como ${job.title} para aplicar meus conhecimentos e contribuir para o crescimento da ${job.company}.
 
-=== COMPETÊNCIAS TÉCNICAS ===
+=== HABILIDADES TÉCNICAS ===
 ${job.skills.map(skill => `• ${skill}`).join('\n')}
 
 === EXPERIÊNCIA PROFISSIONAL ===
-[Baseado no currículo original com otimizações]
-• Experiência relevante destacando projetos relacionados aos requisitos da vaga
-• Resultados quantificáveis e métricas de performance
-• Tecnologias e metodologias alinhadas com a posição
+[Cargo Anterior] - [Empresa] (Período)
+• Desenvolveu soluções utilizando ${job.skills[0]} e ${job.skills[1]}
+• Participou de projetos que resultaram em melhorias significativas
+• Trabalhou em equipe seguindo metodologias ágeis
 
 === FORMAÇÃO ACADÊMICA ===
-[Informações educacionais relevantes]
+[Curso] - [Instituição] (Ano)
 
-=== CERTIFICAÇÕES E CURSOS ===
-• Certificações relevantes para ${job.title}
-• Cursos complementares na área
+=== PROJETOS RELEVANTES ===
+• Projeto utilizando ${job.skills[0]}: Descrição do projeto
+• Sistema desenvolvido com ${job.skills[1]}: Descrição do projeto
 
-=== MELHORIAS IMPLEMENTADAS ===
-${analysis.improvements.map(improvement => `• ${improvement}`).join('\n')}
-
-=== PALAVRAS-CHAVE OTIMIZADAS ===
-${job.skills.join(' • ')}
+=== CERTIFICAÇÕES ===
+• Certificação em ${job.skills[0]}
+• Curso de ${job.skills[1]}
 
 ---
-Currículo otimizado automaticamente com base na análise de compatibilidade.
-Score de compatibilidade: ${analysis.compatibilityScore}%
-`;
+Este currículo foi otimizado com base na análise de compatibilidade de ${analysis.compatibilityScore}%
+      `.trim();
+      
+      resolve(optimizedContent);
+    }, 1500);
+  });
+};
 
-  return optimizedContent;
+// Funções auxiliares
+const extractSkillsFromText = (text: string): string[] => {
+  const commonSkills = [
+    'JavaScript', 'TypeScript', 'React', 'Node.js', 'Python', 'Java',
+    'SQL', 'Git', 'Docker', 'AWS', 'HTML', 'CSS', 'Angular', 'Vue.js'
+  ];
+  
+  return commonSkills.filter(skill => 
+    text.toLowerCase().includes(skill.toLowerCase())
+  );
+};
+
+const extractRequirementsFromText = (text: string): string[] => {
+  // Simulação de extração de requisitos
+  return [
+    'Experiência comprovada na área',
+    'Conhecimento das tecnologias mencionadas',
+    'Capacidade de trabalhar em equipe',
+    'Proatividade e autonomia'
+  ];
 };
