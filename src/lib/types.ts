@@ -36,3 +36,38 @@ export interface OptimizedResume {
   improvements: string[];
   createdAt: Date;
 }
+
+// Novas interfaces para o sistema de usuários
+export interface User {
+  id: string;
+  email: string;
+  name: string;
+  phone: string;
+  address: string;
+  createdAt: Date;
+  emailConfirmed: boolean;
+}
+
+export interface UserProfile {
+  id: string;
+  userId: string;
+  fullName: string;
+  email: string;
+  phone: string;
+  address: string;
+  education: string;
+  experience: string;
+  skills: string[];
+  certifications: string[];
+  projects: string[];
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface RegisterData {
+  name: string;
+  email: string;
+  phone: string;
+  address: string;
+  password: string;
+}
