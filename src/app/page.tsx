@@ -20,13 +20,16 @@ import {
   CheckCircle, 
   XCircle, 
   Zap,
-  Circle,
   TrendingUp,
   User,
   Home,
   BarChart3,
   Target,
-  Lightbulb
+  Lightbulb,
+  Lock,
+  LogOut,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { JobDescription, ResumeData, AnalysisResult, OptimizedResume } from '@/lib/types';
 import { 
@@ -47,7 +50,126 @@ import {
   generateOptimizedResume 
 } from '@/lib/resume-analyzer';
 
-export default function ResumeAnalyzer() {
+// Credenciais de acesso (em produção, isso deveria vir de um backend seguro)
+const LOGIN_CREDENTIALS = {
+  username: 'admin',
+  password: 'resume2024'
+};
+
+function LoginPage({ onLogin }: { onLogin: () => void }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    // Simular delay de autenticação
+    await new Promise(resolve => setTimeout(resolve, 1000));
+
+    if (username === LOGIN_CREDENTIALS.username && password === LOGIN_CREDENTIALS.password) {
+      localStorage.setItem('resume_analyzer_auth', 'true');
+      onLogin();
+    } else {
+      setError('Credenciais inválidas. Tente novamente.');
+    }
+    
+    setLoading(false);
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4 w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
+            <Lock className="w-8 h-8 text-white" />
+          </div>
+          <CardTitle className="text-2xl font-bold text-gray-900">
+            Acesso Restrito
+          </CardTitle>
+          <CardDescription>
+            Faça login para acessar o Analisador de Currículos
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="username">Usuário</Label>
+              <Input
+                id="username"
+                type="text"
+                placeholder="Digite seu usuário"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="password">Senha</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Digite sua senha"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-400" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {error && (
+              <Alert className="border-red-200 bg-red-50">
+                <XCircle className="h-4 w-4 text-red-600" />
+                <AlertDescription className="text-red-800">
+                  {error}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <Button 
+              type="submit" 
+              className="w-full" 
+              disabled={loading || !username || !password}
+            >
+              {loading ? 'Entrando...' : 'Entrar'}
+            </Button>
+          </form>
+
+          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-800 font-medium mb-2">
+              Credenciais de demonstração:
+            </p>
+            <p className="text-xs text-blue-700">
+              <strong>Usuário:</strong> admin<br />
+              <strong>Senha:</strong> resume2024
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function ResumeAnalyzer() {
   const [activeTab, setActiveTab] = useState('job');
   const [loading, setLoading] = useState(false);
   const [jobInput, setJobInput] = useState('');
@@ -68,6 +190,11 @@ export default function ResumeAnalyzer() {
     if (resumes.length > 0) setCurrentResume(resumes[resumes.length - 1]);
     if (analyses.length > 0) setCurrentAnalysis(analyses[analyses.length - 1]);
   }, []);
+
+  const handleLogout = () => {
+    localStorage.removeItem('resume_analyzer_auth');
+    window.location.reload();
+  };
 
   const handleJobSubmit = async () => {
     if (!jobInput.trim()) {
@@ -216,14 +343,24 @@ export default function ResumeAnalyzer() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Analisador de Currículos
-          </h1>
-          <p className="text-lg text-gray-600">
-            Otimize seu currículo para vagas específicas e aumente suas chances de sucesso
-          </p>
+        {/* Header with Logout */}
+        <div className="flex justify-between items-center mb-8">
+          <div className="text-center flex-1">
+            <h1 className="text-4xl font-bold text-gray-900 mb-2">
+              Analisador de Currículos
+            </h1>
+            <p className="text-lg text-gray-600">
+              Otimize seu currículo para vagas específicas e aumente suas chances de sucesso
+            </p>
+          </div>
+          <Button
+            onClick={handleLogout}
+            variant="outline"
+            className="flex items-center gap-2 ml-4"
+          >
+            <LogOut className="w-4 h-4" />
+            Sair
+          </Button>
         </div>
 
         {/* Error Alert */}
@@ -628,4 +765,37 @@ export default function ResumeAnalyzer() {
       </div>
     </div>
   );
+}
+
+export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Verificar se o usuário já está autenticado
+    const authStatus = localStorage.getItem('resume_analyzer_auth');
+    setIsAuthenticated(authStatus === 'true');
+    setLoading(false);
+  }, []);
+
+  const handleLogin = () => {
+    setIsAuthenticated(true);
+  };
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
+          <p className="text-gray-600">Carregando...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
+
+  return <ResumeAnalyzer />;
 }
