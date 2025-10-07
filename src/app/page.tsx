@@ -29,9 +29,17 @@ import {
   Lock,
   LogOut,
   Eye,
-  EyeOff
+  EyeOff,
+  UserPlus,
+  Mail,
+  Phone,
+  MapPin,
+  GraduationCap,
+  Briefcase,
+  Award,
+  Code
 } from 'lucide-react';
-import { JobDescription, ResumeData, AnalysisResult, OptimizedResume } from '@/lib/types';
+import { JobDescription, ResumeData, AnalysisResult, OptimizedResume, User as UserType, UserProfile, RegisterData } from '@/lib/types';
 import { 
   saveJobDescription, 
   saveResume, 
@@ -41,83 +49,293 @@ import {
   getResumes,
   getAnalyses,
   getOptimizedResumes,
-  generateId 
+  generateId,
+  registerUser,
+  loginUser,
+  getCurrentUser,
+  setCurrentUser,
+  clearCurrentUser,
+  saveUserProfile,
+  getUserProfile
 } from '@/lib/storage';
 import { 
   analyzeResumeCompatibility, 
   extractTextFromFile, 
   parseJobDescription,
-  generateOptimizedResume 
+  generateOptimizedResume,
+  extractProfileFromResume
 } from '@/lib/resume-analyzer';
 
-// Credenciais de acesso (em produção, isso deveria vir de um backend seguro)
-const LOGIN_CREDENTIALS = {
-  username: 'admin',
-  password: 'resume2024'
-};
+// Importar bibliotecas para download
+import jsPDF from 'jspdf';
+import { Document, Packer, Paragraph, TextRun, HeadingLevel } from 'docx';
 
-function LoginPage({ onLogin }: { onLogin: () => void }) {
-  const [username, setUsername] = useState('');
-  const [password, setPassword] = useState('');
+function RegisterPage({ onBackToLogin, onRegisterSuccess }: { onBackToLogin: () => void, onRegisterSuccess: () => void }) {
+  const [formData, setFormData] = useState<RegisterData>({
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    password: ''
+  });
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
 
-    // Simular delay de autenticação
-    await new Promise(resolve => setTimeout(resolve, 1000));
-
-    if (username === LOGIN_CREDENTIALS.username && password === LOGIN_CREDENTIALS.password) {
-      localStorage.setItem('resume_analyzer_auth', 'true');
-      onLogin();
-    } else {
-      setError('Credenciais inválidas. Tente novamente.');
+    if (!formData.name || !formData.email || !formData.phone || !formData.address || !formData.password) {
+      setError('Todos os campos são obrigatórios');
+      return;
     }
-    
-    setLoading(false);
+
+    if (formData.password !== confirmPassword) {
+      setError('As senhas não coincidem');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('A senha deve ter pelo menos 6 caracteres');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const user = await registerUser(formData);
+      if (user) {
+        onRegisterSuccess();
+      } else {
+        setError('Erro ao criar conta. Tente novamente.');
+      }
+    } catch (err) {
+      setError('Erro ao criar conta. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
-          <div className="mx-auto mb-4 w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center">
-            <Lock className="w-8 h-8 text-white" />
-          </div>
-          <CardTitle className="text-2xl font-bold text-gray-900">
-            Acesso Restrito
-          </CardTitle>
-          <CardDescription>
-            Faça login para acessar o Analisador de Currículos
-          </CardDescription>
+          <CardTitle className="text-2xl font-bold text-gray-900">Criar Conta</CardTitle>
+          <CardDescription>Preencha seus dados para se cadastrar</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin} className="space-y-4">
+          <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="username">Usuário</Label>
+              <Label htmlFor="name">Nome Completo</Label>
               <Input
-                id="username"
+                id="name"
                 type="text"
-                placeholder="Digite seu usuário"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                value={formData.name}
+                onChange={(e) => setFormData({...formData, name: e.target.value})}
+                placeholder="Seu nome completo"
                 required
               />
             </div>
-            
+
+            <div className="space-y-2">
+              <Label htmlFor="email">E-mail</Label>
+              <Input
+                id="email"
+                type="email"
+                value={formData.email}
+                onChange={(e) => setFormData({...formData, email: e.target.value})}
+                placeholder="seu@email.com"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="phone">Telefone</Label>
+              <Input
+                id="phone"
+                type="tel"
+                value={formData.phone}
+                onChange={(e) => setFormData({...formData, phone: e.target.value})}
+                placeholder="(11) 99999-9999"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="address">Endereço</Label>
+              <Input
+                id="address"
+                type="text"
+                value={formData.address}
+                onChange={(e) => setFormData({...formData, address: e.target.value})}
+                placeholder="Rua, número, cidade - UF"
+                required
+              />
+            </div>
+
             <div className="space-y-2">
               <Label htmlFor="password">Senha</Label>
               <div className="relative">
                 <Input
                   id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  placeholder="Digite sua senha"
+                  type={showPassword ? "text" : "password"}
+                  value={formData.password}
+                  onChange={(e) => setFormData({...formData, password: e.target.value})}
+                  placeholder="Sua senha"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowPassword(!showPassword)}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-400" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="confirmPassword">Confirmar Senha</Label>
+              <div className="relative">
+                <Input
+                  id="confirmPassword"
+                  type={showConfirmPassword ? "text" : "password"}
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirme sua senha"
+                  required
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-0 top-0 h-full px-3 py-2 hover:bg-transparent"
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                >
+                  {showConfirmPassword ? (
+                    <EyeOff className="h-4 w-4 text-gray-400" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-gray-400" />
+                  )}
+                </Button>
+              </div>
+            </div>
+
+            {error && (
+              <Alert className="border-red-200 bg-red-50">
+                <XCircle className="h-4 w-4 text-red-600" />
+                <AlertDescription className="text-red-800">
+                  {error}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            <Button 
+              type="submit" 
+              className="w-full bg-green-600 hover:bg-green-700"
+              disabled={loading}
+            >
+              {loading ? 'Criando conta...' : 'Criar Conta'}
+            </Button>
+          </form>
+
+          <div className="mt-6 text-center">
+            <Button
+              variant="link"
+              onClick={onBackToLogin}
+              className="text-blue-600 hover:text-blue-800"
+            >
+              Já tem uma conta? Faça login
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function LoginPage({ onLogin, onShowRegister }: { onLogin: (user: UserType) => void, onShowRegister: () => void }) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
+
+    try {
+      // Verificar credenciais de demonstração
+      if (email === 'admin@demo.com' && password === 'demo123') {
+        const demoUser: UserType = {
+          id: 'demo-user',
+          email: 'admin@demo.com',
+          name: 'Usuário Demo',
+          phone: '(11) 99999-9999',
+          address: 'São Paulo, SP',
+          createdAt: new Date(),
+          emailConfirmed: true
+        };
+        setCurrentUser(demoUser);
+        onLogin(demoUser);
+        return;
+      }
+
+      const user = await loginUser(email, password);
+      if (user) {
+        setCurrentUser(user);
+        onLogin(user);
+      } else {
+        setError('E-mail ou senha incorretos');
+      }
+    } catch (err) {
+      setError('Erro ao fazer login. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <CardTitle className="text-2xl font-bold text-gray-900">Analisador de Currículos</CardTitle>
+          <CardDescription>Faça login para acessar o sistema</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="email">E-mail</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="seu@email.com"
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="password">Senha</Label>
+              <div className="relative">
+                <Input
+                  id="password"
+                  type={showPassword ? "text" : "password"}
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Sua senha"
                   required
                 />
                 <Button
@@ -147,21 +365,21 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
 
             <Button 
               type="submit" 
-              className="w-full" 
-              disabled={loading || !username || !password}
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              disabled={loading}
             >
               {loading ? 'Entrando...' : 'Entrar'}
             </Button>
           </form>
 
-          <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-            <p className="text-sm text-blue-800 font-medium mb-2">
-              Credenciais de demonstração:
-            </p>
-            <p className="text-xs text-blue-700">
-              <strong>Usuário:</strong> admin<br />
-              <strong>Senha:</strong> resume2024
-            </p>
+          <div className="mt-6 text-center">
+            <Button
+              variant="link"
+              onClick={onShowRegister}
+              className="text-green-600 hover:text-green-800"
+            >
+              Não tem uma conta? Cadastre-se
+            </Button>
           </div>
         </CardContent>
       </Card>
@@ -169,36 +387,266 @@ function LoginPage({ onLogin }: { onLogin: () => void }) {
   );
 }
 
-function ResumeAnalyzer() {
-  const [activeTab, setActiveTab] = useState('job');
+function UserProfileTab({ userProfile, onProfileUpdate }: { userProfile: UserProfile | null, onProfileUpdate: (profile: UserProfile) => void }) {
+  const [formData, setFormData] = useState({
+    fullName: userProfile?.fullName || '',
+    email: userProfile?.email || '',
+    phone: userProfile?.phone || '',
+    address: userProfile?.address || '',
+    education: userProfile?.education || '',
+    experience: userProfile?.experience || '',
+    skills: userProfile?.skills?.join(', ') || '',
+    certifications: userProfile?.certifications?.join(', ') || '',
+    projects: userProfile?.projects?.join(', ') || ''
+  });
   const [loading, setLoading] = useState(false);
-  const [jobInput, setJobInput] = useState('');
-  const [jobInputType, setJobInputType] = useState<'url' | 'text'>('url');
+  const [success, setSuccess] = useState(false);
+
+  // Atualizar formData quando userProfile mudar
+  useEffect(() => {
+    if (userProfile) {
+      setFormData({
+        fullName: userProfile.fullName || '',
+        email: userProfile.email || '',
+        phone: userProfile.phone || '',
+        address: userProfile.address || '',
+        education: userProfile.education || '',
+        experience: userProfile.experience || '',
+        skills: userProfile.skills?.join(', ') || '',
+        certifications: userProfile.certifications?.join(', ') || '',
+        projects: userProfile.projects?.join(', ') || ''
+      });
+    }
+  }, [userProfile]);
+
+  const handleSave = async () => {
+    const currentUser = getCurrentUser();
+    if (!currentUser) return;
+
+    setLoading(true);
+    setSuccess(false);
+
+    const profileData = {
+      userId: currentUser.id,
+      fullName: formData.fullName,
+      email: formData.email,
+      phone: formData.phone,
+      address: formData.address,
+      education: formData.education,
+      experience: formData.experience,
+      skills: formData.skills.split(',').map(s => s.trim()).filter(s => s),
+      certifications: formData.certifications.split(',').map(s => s.trim()).filter(s => s),
+      projects: formData.projects.split(',').map(s => s.trim()).filter(s => s)
+    };
+
+    const savedProfile = await saveUserProfile(profileData);
+    if (savedProfile) {
+      onProfileUpdate(savedProfile);
+      setSuccess(true);
+      setTimeout(() => setSuccess(false), 3000);
+    }
+
+    setLoading(false);
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <User className="w-5 h-5" />
+          Meu Perfil
+        </CardTitle>
+        <CardDescription>
+          Complete seus dados para gerar currículos personalizados
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="grid md:grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label htmlFor="fullName">Nome Completo</Label>
+            <Input
+              id="fullName"
+              value={formData.fullName}
+              onChange={(e) => setFormData({...formData, fullName: e.target.value})}
+              placeholder="Seu nome completo"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email">E-mail</Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({...formData, email: e.target.value})}
+              placeholder="seu@email.com"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="phone">Telefone</Label>
+            <Input
+              id="phone"
+              value={formData.phone}
+              onChange={(e) => setFormData({...formData, phone: e.target.value})}
+              placeholder="(11) 99999-9999"
+            />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="address">Endereço</Label>
+            <Input
+              id="address"
+              value={formData.address}
+              onChange={(e) => setFormData({...formData, address: e.target.value})}
+              placeholder="Rua, número, cidade - UF"
+            />
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="education">Formação Acadêmica</Label>
+          <Textarea
+            id="education"
+            value={formData.education}
+            onChange={(e) => setFormData({...formData, education: e.target.value})}
+            placeholder="Graduação em Ciência da Computação - Universidade XYZ (2020)"
+            rows={3}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="experience">Experiência Profissional</Label>
+          <Textarea
+            id="experience"
+            value={formData.experience}
+            onChange={(e) => setFormData({...formData, experience: e.target.value})}
+            placeholder="Desenvolvedor Full Stack - Empresa ABC (2021-2024)..."
+            rows={4}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="skills">Habilidades (separadas por vírgula)</Label>
+          <Textarea
+            id="skills"
+            value={formData.skills}
+            onChange={(e) => setFormData({...formData, skills: e.target.value})}
+            placeholder="JavaScript, React, Node.js, Python, SQL"
+            rows={2}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="certifications">Certificações (separadas por vírgula)</Label>
+          <Textarea
+            id="certifications"
+            value={formData.certifications}
+            onChange={(e) => setFormData({...formData, certifications: e.target.value})}
+            placeholder="AWS Certified Developer, Google Cloud Professional"
+            rows={2}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="projects">Projetos (separados por vírgula)</Label>
+          <Textarea
+            id="projects"
+            value={formData.projects}
+            onChange={(e) => setFormData({...formData, projects: e.target.value})}
+            placeholder="Sistema de E-commerce, App Mobile de Delivery"
+            rows={2}
+          />
+        </div>
+
+        {success && (
+          <Alert className="border-green-200 bg-green-50">
+            <CheckCircle className="h-4 w-4 text-green-600" />
+            <AlertDescription className="text-green-800">
+              Perfil salvo com sucesso!
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <Button 
+          onClick={handleSave}
+          disabled={loading}
+          className="w-full"
+        >
+          {loading ? 'Salvando...' : 'Salvar Perfil'}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function ResumeAnalyzer() {
+  const [currentUser, setCurrentUserState] = useState<UserType | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [showRegister, setShowRegister] = useState(false);
+  const [activeTab, setActiveTab] = useState('job');
   const [currentJob, setCurrentJob] = useState<JobDescription | null>(null);
   const [currentResume, setCurrentResume] = useState<ResumeData | null>(null);
   const [currentAnalysis, setCurrentAnalysis] = useState<AnalysisResult | null>(null);
   const [optimizedResume, setOptimizedResume] = useState<OptimizedResume | null>(null);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [jobInput, setJobInput] = useState('');
 
-  // Load data from localStorage on mount
   useEffect(() => {
-    const jobs = getJobDescriptions();
-    const resumes = getResumes();
-    const analyses = getAnalyses();
-    
-    if (jobs.length > 0) setCurrentJob(jobs[jobs.length - 1]);
-    if (resumes.length > 0) setCurrentResume(resumes[resumes.length - 1]);
-    if (analyses.length > 0) setCurrentAnalysis(analyses[analyses.length - 1]);
+    const user = getCurrentUser();
+    if (user) {
+      setCurrentUserState(user);
+      // Carregar perfil do usuário
+      getUserProfile(user.id).then(profile => {
+        if (profile) {
+          setUserProfile(profile);
+        }
+      });
+    }
   }, []);
 
-  const handleLogout = () => {
-    localStorage.removeItem('resume_analyzer_auth');
-    window.location.reload();
+  const handleLogin = (user: UserType) => {
+    setCurrentUserState(user);
+    setShowRegister(false);
   };
+
+  const handleLogout = () => {
+    clearCurrentUser();
+    setCurrentUserState(null);
+    setUserProfile(null);
+    setCurrentJob(null);
+    setCurrentResume(null);
+    setCurrentAnalysis(null);
+    setOptimizedResume(null);
+    setActiveTab('job');
+  };
+
+  const handleRegisterSuccess = () => {
+    setShowRegister(false);
+  };
+
+  const handleProfileUpdate = (profile: UserProfile) => {
+    setUserProfile(profile);
+  };
+
+  if (!currentUser) {
+    if (showRegister) {
+      return (
+        <RegisterPage 
+          onBackToLogin={() => setShowRegister(false)}
+          onRegisterSuccess={handleRegisterSuccess}
+        />
+      );
+    }
+    return (
+      <LoginPage 
+        onLogin={handleLogin}
+        onShowRegister={() => setShowRegister(true)}
+      />
+    );
+  }
 
   const handleJobSubmit = async () => {
     if (!jobInput.trim()) {
-      setError('Por favor, insira um link ou descrição da vaga');
+      setError('Por favor, insira a descrição da vaga ou URL');
       return;
     }
 
@@ -218,7 +666,13 @@ function ResumeAnalyzer() {
         createdAt: new Date()
       };
 
-      saveJobDescription(job);
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        await saveJobDescription(job, currentUser.id);
+      } else {
+        saveJobDescription(job, 'demo-user');
+      }
+      
       setCurrentJob(job);
       setActiveTab('upload');
     } catch (err) {
@@ -250,8 +704,36 @@ function ResumeAnalyzer() {
         uploadedAt: new Date()
       };
 
-      saveResume(resume);
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        await saveResume(resume, currentUser.id);
+      } else {
+        saveResume(resume, 'demo-user');
+      }
+      
       setCurrentResume(resume);
+
+      // Extrair dados do perfil do currículo automaticamente
+      try {
+        const extractedProfile = await extractProfileFromResume(extractedText);
+        if (extractedProfile && Object.keys(extractedProfile).length > 0) {
+          // Se já existe um perfil, mesclar os dados
+          const updatedProfile = {
+            ...userProfile,
+            ...extractedProfile,
+            userId: currentUser?.id || 'demo-user'
+          };
+          
+          // Salvar o perfil atualizado
+          const savedProfile = await saveUserProfile(updatedProfile);
+          if (savedProfile) {
+            setUserProfile(savedProfile);
+          }
+        }
+      } catch (profileError) {
+        // Se falhar a extração do perfil, continuar normalmente
+        console.log('Não foi possível extrair dados do perfil automaticamente');
+      }
       
       if (currentJob) {
         setActiveTab('analysis');
@@ -274,7 +756,14 @@ function ResumeAnalyzer() {
 
     try {
       const analysis = await analyzeResumeCompatibility(currentResume, currentJob);
-      saveAnalysis(analysis);
+      
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        await saveAnalysis(analysis, currentUser.id);
+      } else {
+        saveAnalysis(analysis, 'demo-user');
+      }
+      
       setCurrentAnalysis(analysis);
       setActiveTab('results');
     } catch (err) {
@@ -294,7 +783,7 @@ function ResumeAnalyzer() {
     setError(null);
 
     try {
-      const optimizedContent = await generateOptimizedResume(currentResume, currentJob, currentAnalysis);
+      const optimizedContent = await generateOptimizedResume(currentResume, currentJob, currentAnalysis, userProfile || undefined);
       const optimized: OptimizedResume = {
         id: generateId(),
         originalResumeId: currentResume.id,
@@ -304,7 +793,13 @@ function ResumeAnalyzer() {
         createdAt: new Date()
       };
 
-      saveOptimizedResume(optimized);
+      const currentUser = getCurrentUser();
+      if (currentUser) {
+        await saveOptimizedResume(optimized, currentUser.id);
+      } else {
+        saveOptimizedResume(optimized, 'demo-user');
+      }
+      
       setOptimizedResume(optimized);
       setActiveTab('download');
     } catch (err) {
@@ -314,56 +809,148 @@ function ResumeAnalyzer() {
     }
   };
 
-  const handleDownload = (format: 'pdf' | 'docx') => {
-    if (!optimizedResume) return;
-
-    const blob = new Blob([optimizedResume.content], { type: 'text/plain' });
+  const downloadFile = (content: string, filename: string, type: string = 'text/plain') => {
+    const blob = new Blob([content], { type });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `curriculo-otimizado.${format === 'pdf' ? 'txt' : 'txt'}`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
   };
 
-  const getCompatibilityColor = (score: number) => {
-    if (score >= 80) return 'text-green-600';
-    if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
+  const downloadPDF = async (content: string, filename: string) => {
+    try {
+      const pdf = new jsPDF();
+      const lines = content.split('\n');
+      let yPosition = 20;
+      
+      lines.forEach((line) => {
+        if (yPosition > 280) {
+          pdf.addPage();
+          yPosition = 20;
+        }
+        
+        // Verificar se é um título (linhas com ===)
+        if (line.includes('===')) {
+          pdf.setFontSize(14);
+          pdf.setFont('helvetica', 'bold');
+          const title = line.replace(/=/g, '').trim();
+          pdf.text(title, 20, yPosition);
+          yPosition += 10;
+        } else if (line.trim().startsWith('•')) {
+          pdf.setFontSize(10);
+          pdf.setFont('helvetica', 'normal');
+          pdf.text(line, 25, yPosition);
+          yPosition += 6;
+        } else if (line.trim()) {
+          pdf.setFontSize(10);
+          pdf.setFont('helvetica', 'normal');
+          pdf.text(line, 20, yPosition);
+          yPosition += 6;
+        } else {
+          yPosition += 4;
+        }
+      });
+      
+      pdf.save(filename);
+    } catch (error) {
+      console.error('Erro ao gerar PDF:', error);
+      // Fallback para download de texto
+      downloadFile(content, filename.replace('.pdf', '.txt'));
+    }
   };
 
-  const getCompatibilityBgColor = (score: number) => {
-    if (score >= 80) return 'bg-green-100';
-    if (score >= 60) return 'bg-yellow-100';
-    return 'bg-red-100';
+  const downloadDOCX = async (content: string, filename: string) => {
+    try {
+      const lines = content.split('\n');
+      const paragraphs = [];
+      
+      for (const line of lines) {
+        if (line.includes('===')) {
+          // Título
+          const title = line.replace(/=/g, '').trim();
+          paragraphs.push(
+            new Paragraph({
+              children: [new TextRun({ text: title, bold: true, size: 28 })],
+              heading: HeadingLevel.HEADING_2,
+              spacing: { after: 200 }
+            })
+          );
+        } else if (line.trim().startsWith('•')) {
+          // Item de lista
+          paragraphs.push(
+            new Paragraph({
+              children: [new TextRun({ text: line, size: 22 })],
+              spacing: { after: 100 }
+            })
+          );
+        } else if (line.trim()) {
+          // Texto normal
+          paragraphs.push(
+            new Paragraph({
+              children: [new TextRun({ text: line, size: 22 })],
+              spacing: { after: 100 }
+            })
+          );
+        } else {
+          // Linha vazia
+          paragraphs.push(new Paragraph({ children: [new TextRun({ text: '' })] }));
+        }
+      }
+      
+      const doc = new Document({
+        sections: [{
+          properties: {},
+          children: paragraphs
+        }]
+      });
+      
+      const buffer = await Packer.toBlob(doc);
+      const url = URL.createObjectURL(buffer);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error('Erro ao gerar DOCX:', error);
+      // Fallback para download de texto
+      downloadFile(content, filename.replace('.docx', '.txt'));
+    }
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header with Logout */}
-        <div className="flex justify-between items-center mb-8">
-          <div className="text-center flex-1">
-            <h1 className="text-4xl font-bold text-gray-900 mb-2">
-              Analisador de Currículos
-            </h1>
-            <p className="text-lg text-gray-600">
-              Otimize seu currículo para vagas específicas e aumente suas chances de sucesso
-            </p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-green-50">
+      {/* Header */}
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between items-center h-16">
+            <div className="flex items-center">
+              <FileText className="h-8 w-8 text-blue-600 mr-3" />
+              <h1 className="text-xl font-semibold text-gray-900">Analisador de Currículos</h1>
+            </div>
+            <div className="flex items-center gap-4">
+              <span className="text-sm text-gray-600">Olá, {currentUser.name}</span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleLogout}
+                className="flex items-center gap-2"
+              >
+                <LogOut className="h-4 w-4" />
+                Sair
+              </Button>
+            </div>
           </div>
-          <Button
-            onClick={handleLogout}
-            variant="outline"
-            className="flex items-center gap-2 ml-4"
-          >
-            <LogOut className="w-4 h-4" />
-            Sair
-          </Button>
         </div>
+      </header>
 
-        {/* Error Alert */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {error && (
           <Alert className="mb-6 border-red-200 bg-red-50">
             <XCircle className="h-4 w-4 text-red-600" />
@@ -373,88 +960,59 @@ function ResumeAnalyzer() {
           </Alert>
         )}
 
-        {/* Main Content */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 bg-white shadow-sm">
+          <TabsList className="grid w-full grid-cols-6">
             <TabsTrigger value="job" className="flex items-center gap-2">
-              <Home className="w-4 h-4" />
-              <span className="hidden sm:inline">Vaga</span>
+              <Globe className="w-4 h-4" />
+              Vaga
             </TabsTrigger>
             <TabsTrigger value="upload" className="flex items-center gap-2">
               <Upload className="w-4 h-4" />
-              <span className="hidden sm:inline">Currículo</span>
+              Currículo
+            </TabsTrigger>
+            <TabsTrigger value="profile" className="flex items-center gap-2">
+              <User className="w-4 h-4" />
+              Perfil
             </TabsTrigger>
             <TabsTrigger value="analysis" className="flex items-center gap-2">
               <PieChart className="w-4 h-4" />
-              <span className="hidden sm:inline">Análise</span>
+              Análise
             </TabsTrigger>
             <TabsTrigger value="results" className="flex items-center gap-2">
-              <Target className="w-4 h-4" />
-              <span className="hidden sm:inline">Resultados</span>
+              <BarChart3 className="w-4 h-4" />
+              Resultados
             </TabsTrigger>
             <TabsTrigger value="download" className="flex items-center gap-2">
               <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Download</span>
+              Download
             </TabsTrigger>
           </TabsList>
 
-          {/* Job Description Tab */}
           <TabsContent value="job">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <Home className="w-5 h-5" />
+                  <Globe className="w-5 h-5" />
                   Descrição da Vaga
                 </CardTitle>
                 <CardDescription>
-                  Insira o link da vaga ou cole a descrição completa
+                  Cole a URL da vaga ou a descrição completa para análise
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex gap-2 mb-4">
-                  <Button
-                    variant={jobInputType === 'url' ? 'default' : 'outline'}
-                    onClick={() => setJobInputType('url')}
-                    className="flex items-center gap-2"
-                  >
-                    <Globe className="w-4 h-4" />
-                    Link da Vaga
-                  </Button>
-                  <Button
-                    variant={jobInputType === 'text' ? 'default' : 'outline'}
-                    onClick={() => setJobInputType('text')}
-                    className="flex items-center gap-2"
-                  >
-                    <FileText className="w-4 h-4" />
-                    Descrição
-                  </Button>
+                <div className="space-y-2">
+                  <Label htmlFor="job-input">URL da vaga ou descrição</Label>
+                  <Textarea
+                    id="job-input"
+                    placeholder="Cole aqui a URL da vaga (ex: https://empresa.gupy.io/jobs/123456) ou a descrição completa da vaga..."
+                    value={jobInput}
+                    onChange={(e) => setJobInput(e.target.value)}
+                    rows={8}
+                  />
                 </div>
-
-                {jobInputType === 'url' ? (
-                  <div className="space-y-2">
-                    <Label htmlFor="job-url">URL da Vaga</Label>
-                    <Input
-                      id="job-url"
-                      placeholder="https://exemplo.com/vaga"
-                      value={jobInput}
-                      onChange={(e) => setJobInput(e.target.value)}
-                    />
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    <Label htmlFor="job-description">Descrição da Vaga</Label>
-                    <Textarea
-                      id="job-description"
-                      placeholder="Cole aqui a descrição completa da vaga..."
-                      value={jobInput}
-                      onChange={(e) => setJobInput(e.target.value)}
-                      rows={8}
-                    />
-                  </div>
-                )}
-
+                
                 <Button 
-                  onClick={handleJobSubmit} 
+                  onClick={handleJobSubmit}
                   disabled={loading || !jobInput.trim()}
                   className="w-full"
                 >
@@ -462,19 +1020,24 @@ function ResumeAnalyzer() {
                 </Button>
 
                 {currentJob && (
-                  <div className="mt-6 p-4 bg-blue-50 rounded-lg">
-                    <h3 className="font-semibold text-blue-900 mb-2">
-                      {currentJob.title} - {currentJob.company}
-                    </h3>
-                    <p className="text-blue-800 text-sm mb-3">
-                      {currentJob.description.substring(0, 200)}...
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {currentJob.skills.map((skill, index) => (
-                        <Badge key={index} variant="secondary" className="text-xs">
-                          {skill}
-                        </Badge>
-                      ))}
+                  <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                    <div className="flex items-center gap-2 mb-3">
+                      <CheckCircle className="w-5 h-5 text-green-600" />
+                      <h3 className="font-semibold text-green-800">Vaga Processada</h3>
+                    </div>
+                    <div className="space-y-2 text-sm">
+                      <p><strong>Cargo:</strong> {currentJob.title}</p>
+                      <p><strong>Empresa:</strong> {currentJob.company}</p>
+                      <div>
+                        <strong>Habilidades:</strong>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {currentJob.skills.map((skill, index) => (
+                            <Badge key={index} variant="secondary" className="text-xs">
+                              {skill}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -482,7 +1045,6 @@ function ResumeAnalyzer() {
             </Card>
           </TabsContent>
 
-          {/* Upload Resume Tab */}
           <TabsContent value="upload">
             <Card>
               <CardHeader>
@@ -491,39 +1053,42 @@ function ResumeAnalyzer() {
                   Upload do Currículo
                 </CardTitle>
                 <CardDescription>
-                  Envie seu currículo em formato PDF ou DOCX
+                  Envie seu currículo em PDF ou DOCX para análise
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-4">
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
                   <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <Label htmlFor="resume-upload" className="cursor-pointer">
-                    <span className="text-lg font-medium text-gray-700">
-                      Clique para enviar seu currículo
-                    </span>
-                    <p className="text-sm text-gray-500 mt-1">
-                      Formatos aceitos: PDF, DOCX (máx. 10MB)
-                    </p>
-                  </Label>
-                  <Input
-                    id="resume-upload"
-                    type="file"
-                    accept=".pdf,.docx,.doc"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                  />
+                  <div className="space-y-2">
+                    <Label htmlFor="resume-upload" className="cursor-pointer">
+                      <span className="text-lg font-medium text-gray-700">
+                        Clique para enviar seu currículo
+                      </span>
+                      <p className="text-sm text-gray-500 mt-1">
+                        Arquivos PDF ou DOCX até 10MB
+                      </p>
+                    </Label>
+                    <Input
+                      id="resume-upload"
+                      type="file"
+                      accept=".pdf,.doc,.docx"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </div>
                 </div>
 
                 {currentResume && (
-                  <div className="mt-6 p-4 bg-green-50 rounded-lg">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="w-5 h-5 text-green-600" />
-                      <span className="font-medium text-green-900">
-                        Currículo carregado: {currentResume.fileName}
-                      </span>
+                  <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CheckCircle className="w-5 h-5 text-blue-600" />
+                      <h3 className="font-semibold text-blue-800">Currículo Carregado</h3>
                     </div>
-                    <p className="text-green-700 text-sm mt-1">
-                      Arquivo processado com sucesso
+                    <p className="text-sm text-blue-700">
+                      <strong>Arquivo:</strong> {currentResume.fileName}
+                    </p>
+                    <p className="text-sm text-blue-700">
+                      <strong>Data:</strong> {currentResume.uploadedAt.toLocaleDateString()}
                     </p>
                   </div>
                 )}
@@ -531,7 +1096,13 @@ function ResumeAnalyzer() {
             </Card>
           </TabsContent>
 
-          {/* Analysis Tab */}
+          <TabsContent value="profile">
+            <UserProfileTab 
+              userProfile={userProfile}
+              onProfileUpdate={handleProfileUpdate}
+            />
+          </TabsContent>
+
           <TabsContent value="analysis">
             <Card>
               <CardHeader>
@@ -543,219 +1114,267 @@ function ResumeAnalyzer() {
                   Compare seu currículo com os requisitos da vaga
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                {currentJob && currentResume ? (
-                  <div className="space-y-6">
+              <CardContent className="space-y-4">
+                {!currentJob || !currentResume ? (
+                  <div className="text-center py-8">
+                    <Target className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">
+                      Pronto para análise
+                    </h3>
+                    <p className="text-gray-500">
+                      {!currentJob && !currentResume 
+                        ? 'Adicione uma vaga e faça upload do seu currículo para começar'
+                        : !currentJob 
+                        ? 'Adicione uma vaga para continuar'
+                        : 'Faça upload do seu currículo para continuar'
+                      }
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
                     <div className="grid md:grid-cols-2 gap-4">
                       <div className="p-4 bg-blue-50 rounded-lg">
-                        <h3 className="font-semibold text-blue-900 mb-2">Vaga Selecionada</h3>
-                        <p className="text-blue-800">{currentJob.title}</p>
-                        <p className="text-blue-600 text-sm">{currentJob.company}</p>
+                        <h4 className="font-semibold text-blue-800 mb-2">Vaga Selecionada</h4>
+                        <p className="text-sm text-blue-700">{currentJob.title} - {currentJob.company}</p>
                       </div>
                       <div className="p-4 bg-green-50 rounded-lg">
-                        <h3 className="font-semibold text-green-900 mb-2">Currículo</h3>
-                        <p className="text-green-800">{currentResume.fileName}</p>
-                        <p className="text-green-600 text-sm">
-                          Enviado em {new Date(currentResume.uploadedAt).toLocaleDateString()}
-                        </p>
+                        <h4 className="font-semibold text-green-800 mb-2">Currículo</h4>
+                        <p className="text-sm text-green-700">{currentResume.fileName}</p>
                       </div>
                     </div>
 
                     <Button 
-                      onClick={handleAnalyze} 
+                      onClick={handleAnalyze}
                       disabled={loading}
                       className="w-full"
                       size="lg"
                     >
-                      {loading ? 'Analisando...' : 'Iniciar Análise'}
+                      {loading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Analisando...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4 mr-2" />
+                          Iniciar Análise
+                        </>
+                      )}
                     </Button>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <BarChart3 className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">
-                      Complete as etapas anteriores para iniciar a análise
-                    </p>
                   </div>
                 )}
               </CardContent>
             </Card>
           </TabsContent>
 
-          {/* Results Tab */}
           <TabsContent value="results">
-            <div className="space-y-6">
-              {currentAnalysis ? (
-                <>
-                  {/* Compatibility Score */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2">
-                        <Target className="w-5 h-5" />
-                        Score de Compatibilidade
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className={`text-center p-6 rounded-lg ${getCompatibilityBgColor(currentAnalysis.compatibilityScore)}`}>
-                        <div className={`text-6xl font-bold ${getCompatibilityColor(currentAnalysis.compatibilityScore)} mb-2`}>
-                          {currentAnalysis.compatibilityScore}%
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="w-5 h-5" />
+                  Resultados da Análise
+                </CardTitle>
+                <CardDescription>
+                  Veja como seu currículo se alinha com a vaga
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {!currentAnalysis ? (
+                  <div className="text-center py-8">
+                    <PieChart className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">
+                      Nenhuma análise disponível
+                    </h3>
+                    <p className="text-gray-500">
+                      Execute a análise na aba anterior para ver os resultados
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    {/* Score de Compatibilidade */}
+                    <div className="text-center">
+                      <div className="inline-flex items-center justify-center w-32 h-32 rounded-full bg-gradient-to-r from-blue-500 to-green-500 text-white mb-4">
+                        <div className="text-center">
+                          <div className="text-3xl font-bold">{currentAnalysis.compatibilityScore}%</div>
+                          <div className="text-sm">Compatibilidade</div>
                         </div>
-                        <Progress 
-                          value={currentAnalysis.compatibilityScore} 
-                          className="w-full max-w-md mx-auto mb-4"
-                        />
-                        <p className="text-gray-700">
-                          {currentAnalysis.compatibilityScore >= 80 ? 'Excelente compatibilidade!' :
-                           currentAnalysis.compatibilityScore >= 60 ? 'Boa compatibilidade' :
-                           'Compatibilidade pode ser melhorada'}
-                        </p>
                       </div>
-                    </CardContent>
-                  </Card>
+                      <Progress value={currentAnalysis.compatibilityScore} className="w-full max-w-md mx-auto" />
+                    </div>
 
-                  <div className="grid md:grid-cols-2 gap-6">
-                    {/* Strengths */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-green-700">
+                    <div className="grid md:grid-cols-2 gap-6">
+                      {/* Pontos Fortes */}
+                      <div className="space-y-3">
+                        <h4 className="flex items-center gap-2 font-semibold text-green-700">
                           <CheckCircle className="w-5 h-5" />
                           Pontos Fortes
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
+                        </h4>
                         <ul className="space-y-2">
                           {currentAnalysis.strengths.map((strength, index) => (
-                            <li key={index} className="flex items-start gap-2">
-                              <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
-                              <span className="text-sm">{strength}</span>
+                            <li key={index} className="flex items-start gap-2 text-sm">
+                              <div className="w-2 h-2 bg-green-500 rounded-full mt-2 flex-shrink-0"></div>
+                              {strength}
                             </li>
                           ))}
                         </ul>
-                      </CardContent>
-                    </Card>
+                      </div>
 
-                    {/* Weaknesses */}
-                    <Card>
-                      <CardHeader>
-                        <CardTitle className="flex items-center gap-2 text-red-700">
-                          <XCircle className="w-5 h-5" />
-                          Pontos a Melhorar
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent>
+                      {/* Pontos de Melhoria */}
+                      <div className="space-y-3">
+                        <h4 className="flex items-center gap-2 font-semibold text-orange-700">
+                          <TrendingUp className="w-5 h-5" />
+                          Pontos de Melhoria
+                        </h4>
                         <ul className="space-y-2">
                           {currentAnalysis.weaknesses.map((weakness, index) => (
-                            <li key={index} className="flex items-start gap-2">
-                              <XCircle className="w-4 h-4 text-red-600 mt-0.5 flex-shrink-0" />
-                              <span className="text-sm">{weakness}</span>
+                            <li key={index} className="flex items-start gap-2 text-sm">
+                              <div className="w-2 h-2 bg-orange-500 rounded-full mt-2 flex-shrink-0"></div>
+                              {weakness}
                             </li>
                           ))}
                         </ul>
-                      </CardContent>
-                    </Card>
-                  </div>
+                      </div>
+                    </div>
 
-                  {/* Improvements */}
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="flex items-center gap-2 text-blue-700">
+                    {/* Sugestões de Melhoria */}
+                    <div className="space-y-3">
+                      <h4 className="flex items-center gap-2 font-semibold text-blue-700">
                         <Lightbulb className="w-5 h-5" />
-                        Dicas de Melhoria
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ul className="space-y-3">
+                        Sugestões de Melhoria
+                      </h4>
+                      <ul className="space-y-2">
                         {currentAnalysis.improvements.map((improvement, index) => (
-                          <li key={index} className="flex items-start gap-2">
-                            <Lightbulb className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
-                            <span className="text-sm">{improvement}</span>
+                          <li key={index} className="flex items-start gap-2 text-sm">
+                            <div className="w-2 h-2 bg-blue-500 rounded-full mt-2 flex-shrink-0"></div>
+                            {improvement}
                           </li>
                         ))}
                       </ul>
-                    </CardContent>
-                  </Card>
+                    </div>
 
-                  <div className="text-center">
+                    <Separator />
+
                     <Button 
                       onClick={handleGenerateOptimized}
                       disabled={loading}
+                      className="w-full"
                       size="lg"
-                      className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700"
                     >
-                      {loading ? 'Gerando...' : 'Gerar Currículo Otimizado'}
+                      {loading ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                          Gerando...
+                        </>
+                      ) : (
+                        <>
+                          <Zap className="w-4 h-4 mr-2" />
+                          Gerar Currículo Otimizado
+                        </>
+                      )}
                     </Button>
                   </div>
-                </>
-              ) : (
-                <Card>
-                  <CardContent className="text-center py-8">
-                    <Target className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">
-                      Execute a análise para ver os resultados
-                    </p>
-                  </CardContent>
-                </Card>
-              )}
-            </div>
+                )}
+              </CardContent>
+            </Card>
           </TabsContent>
 
-          {/* Download Tab */}
           <TabsContent value="download">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Download className="w-5 h-5" />
-                  Currículo Otimizado
+                  Download dos Resultados
                 </CardTitle>
                 <CardDescription>
-                  Baixe seu currículo otimizado para a vaga
+                  Baixe seu currículo otimizado e relatório de análise
                 </CardDescription>
               </CardHeader>
-              <CardContent>
-                {optimizedResume ? (
+              <CardContent className="space-y-6">
+                {!optimizedResume ? (
+                  <div className="text-center py-8">
+                    <Download className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-700 mb-2">
+                      Nenhum currículo otimizado disponível
+                    </h3>
+                    <p className="text-gray-500">
+                      Complete a análise para gerar o currículo otimizado
+                    </p>
+                  </div>
+                ) : (
                   <div className="space-y-6">
-                    <div className="p-4 bg-green-50 rounded-lg">
+                    <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                       <div className="flex items-center gap-2 mb-2">
                         <CheckCircle className="w-5 h-5 text-green-600" />
-                        <span className="font-semibold text-green-900">
-                          Currículo otimizado gerado com sucesso!
-                        </span>
+                        <h3 className="font-semibold text-green-800">Currículo Otimizado Pronto!</h3>
                       </div>
-                      <p className="text-green-700 text-sm">
-                        Criado em {new Date(optimizedResume.createdAt).toLocaleDateString()}
+                      <p className="text-sm text-green-700">
+                        Seu currículo foi otimizado com base na análise de compatibilidade de {currentAnalysis?.compatibilityScore}%
                       </p>
                     </div>
 
-                    <div className="border rounded-lg p-4 bg-gray-50 max-h-96 overflow-y-auto">
-                      <pre className="text-sm whitespace-pre-wrap">
-                        {optimizedResume.content}
-                      </pre>
+                    <div className="grid gap-4">
+                      <div className="grid md:grid-cols-2 gap-4">
+                        <Button 
+                          onClick={() => downloadPDF(optimizedResume.content, `curriculo-otimizado-${currentJob?.title?.replace(/\s+/g, '-').toLowerCase()}.pdf`)}
+                          className="flex items-center gap-2"
+                          size="lg"
+                        >
+                          <Download className="w-4 h-4" />
+                          Baixar Currículo (.PDF)
+                        </Button>
+
+                        <Button 
+                          onClick={() => downloadDOCX(optimizedResume.content, `curriculo-otimizado-${currentJob?.title?.replace(/\s+/g, '-').toLowerCase()}.docx`)}
+                          className="flex items-center gap-2"
+                          size="lg"
+                          variant="outline"
+                        >
+                          <Download className="w-4 h-4" />
+                          Baixar Currículo (.DOCX)
+                        </Button>
+                      </div>
+
+                      {currentAnalysis && (
+                        <Button 
+                          variant="outline"
+                          onClick={() => {
+                            const reportContent = `RELATÓRIO DE ANÁLISE DE CURRÍCULO
+
+Vaga: ${currentJob?.title} - ${currentJob?.company}
+Data da Análise: ${currentAnalysis.createdAt.toLocaleDateString()}
+Score de Compatibilidade: ${currentAnalysis.compatibilityScore}%
+
+PONTOS FORTES:
+${currentAnalysis.strengths.map(s => `• ${s}`).join('\n')}
+
+PONTOS DE MELHORIA:
+${currentAnalysis.weaknesses.map(w => `• ${w}`).join('\n')}
+
+SUGESTÕES DE MELHORIA:
+${currentAnalysis.improvements.map(i => `• ${i}`).join('\n')}
+
+---
+Relatório gerado pelo Analisador de Currículos`;
+                            
+                            downloadFile(reportContent, `relatorio-analise-${currentJob?.title?.replace(/\s+/g, '-').toLowerCase()}.txt`);
+                          }}
+                          className="flex items-center gap-2"
+                          size="lg"
+                        >
+                          <FileText className="w-4 h-4" />
+                          Baixar Relatório de Análise (.txt)
+                        </Button>
+                      )}
                     </div>
 
-                    <div className="flex gap-4 justify-center">
-                      <Button 
-                        onClick={() => handleDownload('pdf')}
-                        className="flex items-center gap-2"
-                      >
-                        <Download className="w-4 h-4" />
-                        Download PDF
-                      </Button>
-                      <Button 
-                        onClick={() => handleDownload('docx')}
-                        variant="outline"
-                        className="flex items-center gap-2"
-                      >
-                        <Download className="w-4 h-4" />
-                        Download DOCX
-                      </Button>
+                    <div className="p-4 bg-blue-50 rounded-lg">
+                      <h4 className="font-semibold text-blue-800 mb-2">Preview do Currículo Otimizado</h4>
+                      <div className="bg-white p-4 rounded border max-h-96 overflow-y-auto">
+                        <pre className="text-sm whitespace-pre-wrap font-mono">
+                          {optimizedResume.content}
+                        </pre>
+                      </div>
                     </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Download className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                    <p className="text-gray-600">
-                      Gere o currículo otimizado para fazer o download
-                    </p>
                   </div>
                 )}
               </CardContent>
@@ -765,37 +1384,4 @@ function ResumeAnalyzer() {
       </div>
     </div>
   );
-}
-
-export default function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    // Verificar se o usuário já está autenticado
-    const authStatus = localStorage.getItem('resume_analyzer_auth');
-    setIsAuthenticated(authStatus === 'true');
-    setLoading(false);
-  }, []);
-
-  const handleLogin = () => {
-    setIsAuthenticated(true);
-  };
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-gray-600">Carregando...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!isAuthenticated) {
-    return <LoginPage onLogin={handleLogin} />;
-  }
-
-  return <ResumeAnalyzer />;
 }
