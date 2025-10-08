@@ -37,7 +37,8 @@ import {
   GraduationCap,
   Briefcase,
   Award,
-  Code
+  Code,
+  Info
 } from 'lucide-react';
 import { JobDescription, ResumeData, AnalysisResult, OptimizedResume, User as UserType, UserProfile, RegisterData } from '@/lib/types';
 import { 
@@ -56,7 +57,8 @@ import {
   setCurrentUser,
   clearCurrentUser,
   saveUserProfile,
-  getUserProfile
+  getUserProfile,
+  shouldUpdateProfile
 } from '@/lib/storage';
 import { 
   analyzeResumeCompatibility, 
@@ -589,15 +591,30 @@ export default function ResumeAnalyzer() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [jobInput, setJobInput] = useState('');
+  const [profileMessage, setProfileMessage] = useState<string | null>(null);
 
+  // MELHORIA 2: Carregar perfil salvo no login
   useEffect(() => {
     const user = getCurrentUser();
     if (user) {
       setCurrentUserState(user);
-      // Carregar perfil do usuário
+      // Carregar perfil do usuário automaticamente
       getUserProfile(user.id).then(profile => {
         if (profile) {
           setUserProfile(profile);
+          // Mostrar mensagem para verificar perfil se estiver incompleto
+          const hasIncompleteProfile = !profile.fullName || !profile.email || !profile.phone || 
+                                     !profile.address || !profile.education || !profile.experience ||
+                                     !profile.skills?.length;
+          
+          if (hasIncompleteProfile) {
+            setProfileMessage('📋 Verifique a aba "Perfil" para completar seus dados e melhorar a análise do currículo.');
+            setTimeout(() => setProfileMessage(null), 8000);
+          }
+        } else {
+          // Se não tem perfil, mostrar mensagem
+          setProfileMessage('📋 Complete seu perfil na aba "Perfil" para obter análises mais precisas.');
+          setTimeout(() => setProfileMessage(null), 8000);
         }
       });
     }
@@ -676,7 +693,19 @@ export default function ResumeAnalyzer() {
       setCurrentJob(job);
       setActiveTab('upload');
     } catch (err) {
-      setError('Erro ao processar a vaga. Tente novamente.');
+      console.error('Erro ao processar vaga:', err);
+      const errorMessage = err instanceof Error ? err.message : 'Erro ao processar a vaga. Tente novamente.';
+      
+      // Mensagens mais específicas para o usuário
+      if (errorMessage.includes('Failed to fetch')) {
+        setError('Não foi possível acessar a URL. Verifique se o link está correto e tente novamente.');
+      } else if (errorMessage.includes('CORS')) {
+        setError('Problema de acesso à URL. Tente copiar e colar o texto da vaga diretamente.');
+      } else if (errorMessage.includes('timeout')) {
+        setError('A URL demorou muito para responder. Tente novamente ou cole o texto da vaga.');
+      } else {
+        setError(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
@@ -713,26 +742,66 @@ export default function ResumeAnalyzer() {
       
       setCurrentResume(resume);
 
-      // Extrair dados do perfil do currículo automaticamente
+      // MELHORIA 3: Só atualizar perfil se enviar novo currículo e se necessário
       try {
         const extractedProfile = await extractProfileFromResume(extractedText);
-        if (extractedProfile && Object.keys(extractedProfile).length > 0) {
-          // Se já existe um perfil, mesclar os dados
+        
+        // Verificar se deve atualizar o perfil
+        if (extractedProfile && shouldUpdateProfile(userProfile, extractedProfile)) {
+          // Mesclar dados extraídos com perfil existente (preservar dados existentes)
           const updatedProfile = {
-            ...userProfile,
-            ...extractedProfile,
-            userId: currentUser?.id || 'demo-user'
+            userId: currentUser?.id || 'demo-user',
+            fullName: extractedProfile.fullName || userProfile?.fullName || '',
+            email: extractedProfile.email || userProfile?.email || '',
+            phone: extractedProfile.phone || userProfile?.phone || '',
+            address: extractedProfile.address || userProfile?.address || '',
+            education: extractedProfile.education || userProfile?.education || '',
+            experience: extractedProfile.experience || userProfile?.experience || '',
+            skills: extractedProfile.skills?.length ? extractedProfile.skills : (userProfile?.skills || []),
+            certifications: extractedProfile.certifications?.length ? extractedProfile.certifications : (userProfile?.certifications || []),
+            projects: extractedProfile.projects?.length ? extractedProfile.projects : (userProfile?.projects || [])
           };
           
-          // Salvar o perfil atualizado
+          // MELHORIA 1: Salvar perfil atualizado (upsert - não cria nova linha)
           const savedProfile = await saveUserProfile(updatedProfile);
           if (savedProfile) {
             setUserProfile(savedProfile);
+            
+            // Verificar quais campos foram extraídos
+            const extractedFields = [];
+            if (extractedProfile.fullName) extractedFields.push('Nome');
+            if (extractedProfile.email) extractedFields.push('E-mail');
+            if (extractedProfile.phone) extractedFields.push('Telefone');
+            if (extractedProfile.address) extractedFields.push('Endereço');
+            if (extractedProfile.education) extractedFields.push('Formação');
+            if (extractedProfile.experience) extractedFields.push('Experiência');
+            if (extractedProfile.skills && extractedProfile.skills.length > 0) extractedFields.push('Habilidades');
+            if (extractedProfile.certifications && extractedProfile.certifications.length > 0) extractedFields.push('Certificações');
+            
+            if (extractedFields.length > 0) {
+              // Mostrar sucesso com campos extraídos
+              setError(null);
+              setProfileMessage(`✅ Perfil atualizado automaticamente com: ${extractedFields.join(', ')}. Verifique a aba "Perfil" para confirmar os dados.`);
+              setTimeout(() => setProfileMessage(null), 8000);
+            } else {
+              // Mostrar alerta para preenchimento manual
+              setProfileMessage('⚠️ Não foi possível extrair dados do currículo automaticamente. Por favor, preencha manualmente os campos na aba "Perfil".');
+              setTimeout(() => setProfileMessage(null), 8000);
+            }
           }
+        } else if (userProfile) {
+          // Se já tem perfil completo, apenas mostrar mensagem informativa
+          setProfileMessage('📋 Currículo carregado! Seu perfil já está completo. Verifique a aba "Perfil" se desejar fazer ajustes.');
+          setTimeout(() => setProfileMessage(null), 6000);
+        } else {
+          // Mostrar alerta para preenchimento manual
+          setProfileMessage('⚠️ Não foi possível extrair dados do currículo automaticamente. Por favor, preencha manualmente os campos na aba "Perfil".');
+          setTimeout(() => setProfileMessage(null), 8000);
         }
       } catch (profileError) {
-        // Se falhar a extração do perfil, continuar normalmente
-        console.log('Não foi possível extrair dados do perfil automaticamente');
+        // Se falhar a extração do perfil, mostrar alerta
+        setProfileMessage('⚠️ Não foi possível extrair dados do currículo automaticamente. Por favor, preencha manualmente os campos na aba "Perfil".');
+        setTimeout(() => setProfileMessage(null), 8000);
       }
       
       if (currentJob) {
@@ -951,6 +1020,16 @@ export default function ResumeAnalyzer() {
       </header>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* MELHORIA 3: Mensagem para verificar perfil */}
+        {profileMessage && (
+          <Alert className="mb-6 border-blue-200 bg-blue-50">
+            <Info className="h-4 w-4 text-blue-600" />
+            <AlertDescription className="text-blue-800">
+              {profileMessage}
+            </AlertDescription>
+          </Alert>
+        )}
+
         {error && (
           <Alert className="mb-6 border-red-200 bg-red-50">
             <XCircle className="h-4 w-4 text-red-600" />
@@ -1338,23 +1417,7 @@ export default function ResumeAnalyzer() {
                         <Button 
                           variant="outline"
                           onClick={() => {
-                            const reportContent = `RELATÓRIO DE ANÁLISE DE CURRÍCULO
-
-Vaga: ${currentJob?.title} - ${currentJob?.company}
-Data da Análise: ${currentAnalysis.createdAt.toLocaleDateString()}
-Score de Compatibilidade: ${currentAnalysis.compatibilityScore}%
-
-PONTOS FORTES:
-${currentAnalysis.strengths.map(s => `• ${s}`).join('\n')}
-
-PONTOS DE MELHORIA:
-${currentAnalysis.weaknesses.map(w => `• ${w}`).join('\n')}
-
-SUGESTÕES DE MELHORIA:
-${currentAnalysis.improvements.map(i => `• ${i}`).join('\n')}
-
----
-Relatório gerado pelo Analisador de Currículos`;
+                            const reportContent = `RELATÓRIO DE ANÁLISE DE CURRÍCULO\n\nVaga: ${currentJob?.title} - ${currentJob?.company}\nData da Análise: ${currentAnalysis.createdAt.toLocaleDateString()}\nScore de Compatibilidade: ${currentAnalysis.compatibilityScore}%\n\nPONTOS FORTES:\n${currentAnalysis.strengths.map(s => `• ${s}`).join('\n')}\n\nPONTOS DE MELHORIA:\n${currentAnalysis.weaknesses.map(w => `• ${w}`).join('\n')}\n\nSUGESTÕES DE MELHORIA:\n${currentAnalysis.improvements.map(i => `• ${i}`).join('\n')}\n\n---\nRelatório gerado pelo Analisador de Currículos`;
                             
                             downloadFile(reportContent, `relatorio-analise-${currentJob?.title?.replace(/\s+/g, '-').toLowerCase()}.txt`);
                           }}
