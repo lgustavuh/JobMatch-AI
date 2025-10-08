@@ -1,437 +1,506 @@
-import { JobDescription, ResumeData, AnalysisResult, UserProfile } from './types';
-import { generateId } from './storage';
+import { JobDescription, ResumeData, AnalysisResult, OptimizedResume, UserProfile } from './types';
+import { extractJobData, JobExtractionInput, JobExtractionResult, JobExtractionError } from './job-extractor';
 
-// Simular extração de texto de arquivo
-export const extractTextFromFile = async (file: File): Promise<string> => {
-  return new Promise((resolve) => {
-    // Simulação de extração de texto
-    setTimeout(() => {
-      resolve(`Texto extraído do arquivo: ${file.name}\n\nEste é um exemplo de texto extraído de um currículo. Em uma implementação real, aqui seria usado uma biblioteca como PDF.js ou similar para extrair o texto real do arquivo.`);
-    }, 1000);
-  });
-};
-
-// Nova função para extrair dados do perfil do currículo
-export const extractProfileFromResume = async (resumeText: string): Promise<Partial<UserProfile>> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // Simulação de extração de dados do currículo
-      const profileData: Partial<UserProfile> = {};
-      
-      // Extrair nome (primeira linha ou padrão comum)
-      const nameMatch = resumeText.match(/^([A-ZÁÊÇÕ][a-záêçõ\s]+)/m);
-      if (nameMatch) {
-        profileData.fullName = nameMatch[1].trim();
-      }
-      
-      // Extrair email
-      const emailMatch = resumeText.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
-      if (emailMatch) {
-        profileData.email = emailMatch[1];
-      }
-      
-      // Extrair telefone
-      const phoneMatch = resumeText.match(/(\(\d{2}\)\s?\d{4,5}-?\d{4}|\d{2}\s?\d{4,5}-?\d{4})/);
-      if (phoneMatch) {
-        profileData.phone = phoneMatch[1];
-      }
-      
-      // Extrair endereço (procurar por padrões comuns)
-      const addressMatch = resumeText.match(/(Rua|Av\.|Avenida|R\.).+?(?=\n|Email|Telefone|$)/i);
-      if (addressMatch) {
-        profileData.address = addressMatch[0].trim();
-      }
-      
-      // Extrair educação
-      const educationPatterns = [
-        /(?:Formação|Educação|Graduação)[\s\S]*?(?=\n\n|Experiência|Habilidades|$)/i,
-        /(?:Bacharel|Tecnólogo|Mestre|Doutor).*?(?=\n|$)/gi
-      ];
-      
-      for (const pattern of educationPatterns) {
-        const match = resumeText.match(pattern);
-        if (match) {
-          profileData.education = match[0].replace(/^(Formação|Educação|Graduação)[\s:]*/, '').trim();
-          break;
-        }
-      }
-      
-      // Extrair experiência
-      const experienceMatch = resumeText.match(/(?:Experiência|Histórico)[\s\S]*?(?=\n\n|Habilidades|Formação|$)/i);
-      if (experienceMatch) {
-        profileData.experience = experienceMatch[0].replace(/^(Experiência|Histórico)[\s:]*/, '').trim();
-      }
-      
-      // Extrair habilidades
-      const skillsSection = resumeText.match(/(?:Habilidades|Skills|Competências)[\s\S]*?(?=\n\n|Experiência|Formação|$)/i);
-      if (skillsSection) {
-        const skillsText = skillsSection[0].replace(/^(Habilidades|Skills|Competências)[\s:]*/, '');
-        const skills = skillsText.split(/[,\n•-]/).map(s => s.trim()).filter(s => s.length > 0);
-        profileData.skills = skills.slice(0, 10); // Limitar a 10 habilidades
-      }
-      
-      // Extrair certificações
-      const certificationsMatch = resumeText.match(/(?:Certificações|Certificados|Cursos)[\s\S]*?(?=\n\n|Experiência|Habilidades|$)/i);
-      if (certificationsMatch) {
-        const certsText = certificationsMatch[0].replace(/^(Certificações|Certificados|Cursos)[\s:]*/, '');
-        const certifications = certsText.split(/[,\n•-]/).map(s => s.trim()).filter(s => s.length > 0);
-        profileData.certifications = certifications.slice(0, 5);
-      }
-      
-      // Extrair projetos
-      const projectsMatch = resumeText.match(/(?:Projetos|Portfolio)[\s\S]*?(?=\n\n|Experiência|Habilidades|$)/i);
-      if (projectsMatch) {
-        const projectsText = projectsMatch[0].replace(/^(Projetos|Portfolio)[\s:]*/, '');
-        const projects = projectsText.split(/[,\n•-]/).map(s => s.trim()).filter(s => s.length > 0);
-        profileData.projects = projects.slice(0, 5);
-      }
-      
-      resolve(profileData);
-    }, 1500);
-  });
-};
-
-// Função melhorada para parsing de descrição de vaga
-export const parseJobDescription = async (input: string): Promise<Partial<JobDescription>> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // Se for uma URL, tentar extrair dados específicos
-      if (input.startsWith('http')) {
-        // Verificar se é uma URL do Gupy (Stefanini)
-        if (input.includes('stefanini.gupy.io')) {
-          resolve({
-            title: 'Analista de Sistemas Pleno',
-            company: 'Stefanini',
-            description: 'Oportunidade para Analista de Sistemas Pleno na Stefanini. Responsável por análise, desenvolvimento e manutenção de sistemas corporativos. Trabalhar com metodologias ágeis e tecnologias modernas.',
-            requirements: [
-              'Experiência com desenvolvimento de sistemas',
-              'Conhecimento em metodologias ágeis',
-              'Experiência com bancos de dados',
-              'Conhecimento em análise de requisitos'
-            ],
-            skills: ['Java', 'SQL', 'Spring Boot', 'Angular', 'Git', 'Scrum', 'Oracle'],
-            url: input
-          });
-        }
-        // Verificar outras URLs conhecidas
-        else if (input.includes('linkedin.com')) {
-          resolve({
-            title: 'Desenvolvedor Full Stack',
-            company: 'LinkedIn Jobs',
-            description: 'Vaga para desenvolvedor full stack com experiência em tecnologias modernas.',
-            requirements: [
-              'Experiência com desenvolvimento web',
-              'Conhecimento em front-end e back-end',
-              'Experiência com APIs REST'
-            ],
-            skills: ['React', 'Node.js', 'JavaScript', 'TypeScript', 'MongoDB'],
-            url: input
-          });
-        }
-        else if (input.includes('vagas.com.br') || input.includes('catho.com.br')) {
-          resolve({
-            title: 'Desenvolvedor de Software',
-            company: 'Portal de Vagas',
-            description: 'Oportunidade para desenvolvedor de software em empresa de tecnologia.',
-            requirements: [
-              'Graduação em área relacionada',
-              'Experiência com desenvolvimento',
-              'Conhecimento em versionamento'
-            ],
-            skills: ['Python', 'Django', 'PostgreSQL', 'Docker', 'Git'],
-            url: input
-          });
-        }
-        else {
-          // URL genérica - tentar extrair informações básicas
-          const domain = new URL(input).hostname;
-          const companyName = domain.split('.')[0].charAt(0).toUpperCase() + domain.split('.')[0].slice(1);
-          
-          resolve({
-            title: 'Oportunidade de Emprego',
-            company: companyName,
-            description: 'Vaga de emprego encontrada no site da empresa. Para mais detalhes, acesse o link fornecido.',
-            requirements: [
-              'Experiência na área',
-              'Formação adequada',
-              'Habilidades técnicas relevantes'
-            ],
-            skills: ['Comunicação', 'Trabalho em equipe', 'Proatividade'],
-            url: input
-          });
-        }
-      } else {
-        // Parse do texto da descrição - MELHORADO para identificar títulos específicos
-        const skills = extractSkillsFromText(input);
-        const requirements = extractRequirementsFromText(input);
-        const title = extractTitleFromText(input);
-        const company = extractCompanyFromText(input);
+// Função para extrair texto de arquivos
+export async function extractTextFromFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = async (e) => {
+      try {
+        const arrayBuffer = e.target?.result as ArrayBuffer;
         
-        resolve({
-          title: title || 'Vaga de Emprego',
-          company: company || 'Empresa',
-          description: input,
-          requirements,
-          skills
-        });
-      }
-    }, 1500);
-  });
-};
-
-// Analisar compatibilidade entre currículo e vaga - MELHORADO
-export const analyzeResumeCompatibility = async (
-  resume: ResumeData, 
-  job: JobDescription
-): Promise<AnalysisResult> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // Simulação de análise de compatibilidade melhorada
-      const resumeText = resume.extractedText.toLowerCase();
-      const jobSkills = job.skills.map(skill => skill.toLowerCase());
-      const jobRequirements = job.requirements.map(req => req.toLowerCase());
-      
-      // Calcular score baseado em skills encontradas
-      const foundSkills = jobSkills.filter(skill => 
-        resumeText.includes(skill)
-      );
-      
-      // Calcular score baseado em requisitos atendidos
-      const metRequirements = jobRequirements.filter(req => {
-        // Verificar palavras-chave dos requisitos no currículo
-        const keywords = req.split(' ').filter(word => word.length > 3);
-        return keywords.some(keyword => resumeText.includes(keyword));
-      });
-      
-      const skillsScore = jobSkills.length > 0 ? (foundSkills.length / jobSkills.length) * 60 : 30;
-      const requirementsScore = jobRequirements.length > 0 ? (metRequirements.length / jobRequirements.length) * 40 : 20;
-      
-      const compatibilityScore = Math.min(
-        Math.round(skillsScore + requirementsScore),
-        95
-      );
-      
-      // Pontos fortes específicos baseados na vaga
-      const strengths = [];
-      
-      // Verificar habilidades específicas encontradas
-      foundSkills.forEach(skill => {
-        const originalSkill = job.skills.find(s => s.toLowerCase() === skill);
-        if (originalSkill) {
-          strengths.push(`Experiência comprovada em ${originalSkill}`);
+        if (file.type === 'application/pdf') {
+          // Para PDF, usar uma biblioteca como pdf-parse ou similar
+          // Por simplicidade, vamos simular a extração
+          const text = await extractPDFText(arrayBuffer);
+          resolve(text);
+        } else if (file.type.includes('document') || file.type.includes('word')) {
+          // Para DOCX, usar uma biblioteca como mammoth ou similar
+          const text = await extractDOCXText(arrayBuffer);
+          resolve(text);
+        } else {
+          reject(new Error('Tipo de arquivo não suportado'));
         }
-      });
-      
-      // Verificar requisitos específicos
-      if (resumeText.includes('cnh') && job.description.toLowerCase().includes('cnh')) {
-        strengths.push('Possui CNH conforme exigido pela vaga');
+      } catch (error) {
+        reject(error);
       }
-      
-      if (resumeText.includes('graduação') || resumeText.includes('superior')) {
-        strengths.push('Formação acadêmica adequada');
-      }
-      
-      if (resumeText.includes('experiência') || resumeText.includes('anos')) {
-        strengths.push('Experiência profissional relevante');
-      }
-      
-      // Adicionar pontos fortes padrão se necessário
-      if (strengths.length === 0) {
-        strengths.push(
-          'Perfil profissional alinhado com a vaga',
-          'Histórico de experiência na área',
-          'Competências técnicas relevantes'
-        );
-      }
-      
-      // Pontos de melhoria específicos
-      const weaknesses = [];
-      
-      // Habilidades não encontradas
-      const missingSkills = jobSkills.filter(skill => !foundSkills.includes(skill));
-      missingSkills.slice(0, 3).forEach(skill => {
-        const originalSkill = job.skills.find(s => s.toLowerCase() === skill);
-        if (originalSkill) {
-          weaknesses.push(`Experiência em ${originalSkill} não evidenciada no currículo`);
-        }
-      });
-      
-      // Requisitos não atendidos
-      const unmetRequirements = jobRequirements.filter(req => !metRequirements.includes(req));
-      unmetRequirements.slice(0, 2).forEach(req => {
-        weaknesses.push(`Requisito não evidenciado: ${req}`);
-      });
-      
-      // Adicionar pontos de melhoria padrão se necessário
-      if (weaknesses.length === 0) {
-        weaknesses.push(
-          'Algumas habilidades técnicas específicas podem ser destacadas',
-          'Experiência com ferramentas mencionadas na vaga'
-        );
-      }
-      
-      const improvements = [
-        `Destacar experiência com ${job.skills.slice(0, 3).join(', ')}`,
-        'Incluir projetos que demonstrem as habilidades requeridas',
-        'Adicionar palavras-chave específicas da descrição da vaga',
-        'Quantificar resultados e conquistas profissionais',
-        `Enfatizar experiência relevante para ${job.title}`
-      ];
-      
-      resolve({
-        id: generateId(),
-        resumeId: resume.id,
-        jobId: job.id,
-        compatibilityScore,
-        strengths,
-        weaknesses,
-        improvements,
-        createdAt: new Date()
-      });
-    }, 2000);
+    };
+    
+    reader.onerror = () => reject(new Error('Erro ao ler arquivo'));
+    reader.readAsArrayBuffer(file);
   });
-};
+}
 
-// Gerar currículo otimizado com dados do usuário
-export const generateOptimizedResume = async (
-  resume: ResumeData,
-  job: JobDescription,
-  analysis: AnalysisResult,
-  userProfile?: UserProfile
-): Promise<string> => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      const optimizedContent = `
-CURRÍCULO OTIMIZADO PARA: ${job.title}
+// Simulação de extração de PDF (em produção, usar pdf-parse)
+async function extractPDFText(arrayBuffer: ArrayBuffer): Promise<string> {
+  // Simulação - retorna texto genérico para demonstração
+  // Em produção, usar biblioteca específica para extrair texto real do PDF
+  return `Currículo em PDF carregado com sucesso.
 
-=== INFORMAÇÕES PESSOAIS ===
-Nome: ${userProfile?.fullName || '[Seu Nome]'}
-Email: ${userProfile?.email || '[seu.email@exemplo.com]'}
-Telefone: ${userProfile?.phone || '[seu telefone]'}
-Endereço: ${userProfile?.address || '[seu endereço]'}
-LinkedIn: [seu perfil]
+Este é um texto simulado extraído do arquivo PDF.
+Para ver dados reais, complete seu perfil na aba "Perfil".
 
-=== RESUMO PROFISSIONAL ===
-Profissional com experiência em desenvolvimento de software, especializado em ${job.skills.slice(0, 3).join(', ')}. 
-Busco oportunidade como ${job.title} para aplicar meus conhecimentos e contribuir para o crescimento da ${job.company}.
+O sistema tentará extrair informações automaticamente quando possível,
+mas recomendamos preencher manualmente para maior precisão.`;
+}
 
-=== HABILIDADES TÉCNICAS ===
-${job.skills.map(skill => `• ${skill}`).join('\n')}
-${userProfile?.skills ? userProfile.skills.map(skill => `• ${skill}`).join('\n') : ''}
+// Simulação de extração de DOCX (em produção, usar mammoth)
+async function extractDOCXText(arrayBuffer: ArrayBuffer): Promise<string> {
+  // Simulação - retorna texto genérico para demonstração
+  // Em produção, usar biblioteca específica para extrair texto real do DOCX
+  return `Currículo em DOCX carregado com sucesso.
 
-=== EXPERIÊNCIA PROFISSIONAL ===
-${userProfile?.experience || `[Cargo Anterior] - [Empresa] (Período)
-• Desenvolveu soluções utilizando ${job.skills[0]} e ${job.skills[1]}
-• Participou de projetos que resultaram em melhorias significativas
-• Trabalhou em equipe seguindo metodologias ágeis`}
+Este é um texto simulado extraído do arquivo DOCX.
+Para ver dados reais, complete seu perfil na aba "Perfil".
 
-=== FORMAÇÃO ACADÊMICA ===
-${userProfile?.education || '[Curso] - [Instituição] (Ano)'}
+O sistema tentará extrair informações automaticamente quando possível,
+mas recomendamos preencher manualmente para maior precisão.`;
+}
 
-=== PROJETOS RELEVANTES ===
-${userProfile?.projects ? userProfile.projects.map(project => `• ${project}`).join('\n') : 
-`• Projeto utilizando ${job.skills[0]}: Descrição do projeto
-• Sistema desenvolvido com ${job.skills[1]}: Descrição do projeto`}
-
-=== CERTIFICAÇÕES ===
-${userProfile?.certifications ? userProfile.certifications.map(cert => `• ${cert}`).join('\n') : 
-`• Certificação em ${job.skills[0]}
-• Curso de ${job.skills[1]}`}
-
----
-Este currículo foi otimizado com base na análise de compatibilidade de ${analysis.compatibilityScore}%
-      `.trim();
+// Função para analisar descrição de vaga (com suporte a URL)
+export async function parseJobDescription(input: string): Promise<Partial<JobDescription>> {
+  try {
+    // Verificar se é uma URL
+    if (isValidUrl(input)) {
+      // Usar o extrator de vagas para URLs
+      const extractionInput: JobExtractionInput = {
+        url: input,
+        idioma: 'pt-BR'
+      };
       
-      resolve(optimizedContent);
-    }, 1500);
-  });
-};
-
-// Funções auxiliares melhoradas
-const extractSkillsFromText = (text: string): string[] => {
-  const commonSkills = [
-    'JavaScript', 'TypeScript', 'React', 'Node.js', 'Python', 'Java',
-    'SQL', 'Git', 'Docker', 'AWS', 'HTML', 'CSS', 'Angular', 'Vue.js',
-    'Spring Boot', 'MongoDB', 'PostgreSQL', 'Oracle', 'Scrum', 'Agile',
-    'REST API', 'GraphQL', 'Kubernetes', 'Jenkins', 'Linux', 'Windows'
-  ];
-  
-  return commonSkills.filter(skill => 
-    text.toLowerCase().includes(skill.toLowerCase())
-  );
-};
-
-const extractRequirementsFromText = (text: string): string[] => {
-  const requirements = [];
-  
-  if (text.toLowerCase().includes('experiência')) {
-    requirements.push('Experiência comprovada na área');
-  }
-  if (text.toLowerCase().includes('graduação') || text.toLowerCase().includes('superior')) {
-    requirements.push('Formação superior completa');
-  }
-  if (text.toLowerCase().includes('inglês')) {
-    requirements.push('Conhecimento em inglês');
-  }
-  if (text.toLowerCase().includes('equipe')) {
-    requirements.push('Capacidade de trabalhar em equipe');
-  }
-  if (text.toLowerCase().includes('cnh')) {
-    requirements.push('Carteira Nacional de Habilitação');
-  }
-  
-  // Adicionar requisitos padrão se nenhum foi encontrado
-  if (requirements.length === 0) {
-    requirements.push(
-      'Experiência comprovada na área',
-      'Conhecimento das tecnologias mencionadas',
-      'Capacidade de trabalhar em equipe',
-      'Proatividade e autonomia'
-    );
-  }
-  
-  return requirements;
-};
-
-const extractTitleFromText = (text: string): string | null => {
-  // Procurar por padrões específicos primeiro
-  const specificPatterns = [
-    /(\d+\s*-\s*)?([A-Z\s]+(?:ADMINISTRATIVO|DESENVOLVEDOR|ANALISTA|ENGENHEIRO|TÉCNICO|AUXILIAR|ASSISTENTE|COORDENADOR|GERENTE|SUPERVISOR)[A-Z\s]*(?:DE\s+[A-Z]+)?)/i,
-    /vaga\s+para\s+([^.\n]+)/i,
-    /cargo:\s*([^.\n]+)/i,
-    /posição:\s*([^.\n]+)/i,
-    /oportunidade\s+para\s+([^.\n]+)/i
-  ];
-  
-  for (const pattern of specificPatterns) {
-    const match = text.match(pattern);
-    if (match) {
-      // Se encontrou um padrão com código (como "10006272 - AUXILIAR ADMINISTRATIVO DE TI")
-      if (match[2]) {
-        return match[2].trim();
+      const result = await extractJobData(extractionInput);
+      
+      if ('erro' in result) {
+        // Se falhou a extração da URL, usar como texto normal
+        return parseJobDescriptionText(input);
       }
-      return (match[1] || match[0]).trim();
+      
+      // Converter resultado da extração para formato JobDescription
+      return convertExtractionToJobDescription(result);
+    } else {
+      // Processar como texto normal
+      return parseJobDescriptionText(input);
     }
+  } catch (error) {
+    console.error('Erro ao processar descrição da vaga:', error);
+    return parseJobDescriptionText(input);
+  }
+}
+
+// Função auxiliar para validar URL
+function isValidUrl(string: string): boolean {
+  try {
+    new URL(string);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Converter resultado da extração para JobDescription
+function convertExtractionToJobDescription(extraction: JobExtractionResult): Partial<JobDescription> {
+  const skills = [
+    ...extraction.vaga.requisitos.competencias_tecnicas,
+    ...extraction.vaga.requisitos.competencias_comportamentais
+  ];
+
+  const requirements = [
+    ...extraction.vaga.responsabilidades,
+    ...extraction.vaga.requisitos.formacao,
+    ...(extraction.vaga.requisitos.experiencia ? [extraction.vaga.requisitos.experiencia] : [])
+  ];
+
+  return {
+    title: extraction.vaga.titulo,
+    company: extraction.vaga.empresa.nome,
+    description: extraction.resumo_curto,
+    requirements,
+    skills,
+    url: extraction.fonte.url
+  };
+}
+
+// Função para processar texto da vaga
+async function parseJobDescriptionText(jobText: string): Promise<Partial<JobDescription>> {
+  try {
+    const response = await fetch('/api/parse-job', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ jobText }),
+    });
+
+    if (!response.ok) {
+      console.error(`API parse-job retornou status ${response.status}`);
+      throw new Error(`Erro na API: ${response.status}`);
+    }
+
+    const result = await response.json();
+    
+    // Se a API retornou um erro estruturado
+    if (result.erro) {
+      console.error('API retornou erro:', result.mensagem);
+      throw new Error(result.mensagem || 'Erro no processamento da vaga');
+    }
+    
+    // Validar se o resultado tem a estrutura esperada
+    if (!result.title && !result.company) {
+      console.error('Resultado da API não tem estrutura esperada:', result);
+      throw new Error('Resposta da API inválida');
+    }
+    
+    return result;
+  } catch (error) {
+    console.error('Erro ao fazer parsing da vaga:', error);
+    
+    // Fallback: parsing básico local
+    const fallbackResult = {
+      title: extractTitle(jobText),
+      company: extractCompany(jobText),
+      description: jobText.substring(0, 500),
+      requirements: extractRequirements(jobText),
+      skills: extractSkills(jobText)
+    };
+    
+    console.log('Usando fallback parsing:', fallbackResult);
+    return fallbackResult;
+  }
+}
+
+// Funções auxiliares para parsing básico
+function extractTitle(text: string): string {
+  const lines = text.split('\n');
+  const firstLine = lines[0]?.trim();
+  
+  if (firstLine && firstLine.length < 100) {
+    return firstLine;
   }
   
-  return null;
-};
-
-const extractCompanyFromText = (text: string): string | null => {
-  // Procurar por padrões comuns de nomes de empresa
-  const companyPatterns = [
-    /empresa:\s*([^.\n]+)/i,
-    /companhia:\s*([^.\n]+)/i,
-    /na\s+([A-Z][a-zA-Z\s]+)\s+está/i,
-    /grupo\s+([A-Z][a-zA-Z\s]+)/i
+  // Procurar por padrões comuns de título
+  const titlePatterns = [
+    /vaga:?\s*(.+)/i,
+    /cargo:?\s*(.+)/i,
+    /posição:?\s*(.+)/i,
+    /oportunidade:?\s*(.+)/i
   ];
   
-  for (const pattern of companyPatterns) {
+  for (const pattern of titlePatterns) {
     const match = text.match(pattern);
     if (match) {
       return match[1].trim();
     }
   }
   
-  return null;
-};
+  return 'Vaga de Emprego';
+}
+
+function extractCompany(text: string): string {
+  const companyPatterns = [
+    /empresa:?\s*(.+)/i,
+    /companhia:?\s*(.+)/i,
+    /organização:?\s*(.+)/i,
+    /cliente:?\s*(.+)/i
+  ];
+  
+  for (const pattern of companyPatterns) {
+    const match = text.match(pattern);
+    if (match) {
+      return match[1].trim().split('\n')[0];
+    }
+  }
+  
+  return 'Empresa';
+}
+
+function extractRequirements(text: string): string[] {
+  const requirements: string[] = [];
+  const lines = text.split('\n');
+  
+  let inRequirementsSection = false;
+  
+  for (const line of lines) {
+    const trimmedLine = line.trim();
+    
+    // Detectar início da seção de requisitos
+    if (/requisitos|requirements|qualificações|experiência|formação/i.test(trimmedLine)) {
+      inRequirementsSection = true;
+      continue;
+    }
+    
+    // Detectar fim da seção
+    if (inRequirementsSection && /benefícios|salário|contato|sobre|empresa/i.test(trimmedLine)) {
+      inRequirementsSection = false;
+    }
+    
+    // Extrair requisitos
+    if (inRequirementsSection && (trimmedLine.startsWith('•') || trimmedLine.startsWith('-') || trimmedLine.startsWith('*'))) {
+      requirements.push(trimmedLine.substring(1).trim());
+    }
+  }
+  
+  return requirements;
+}
+
+function extractSkills(text: string): string[] {
+  const commonSkills = [
+    'JavaScript', 'TypeScript', 'React', 'Angular', 'Vue.js', 'Node.js', 'Python', 'Java', 'C#', 'PHP',
+    'HTML', 'CSS', 'SQL', 'MongoDB', 'PostgreSQL', 'MySQL', 'Git', 'Docker', 'Kubernetes',
+    'AWS', 'Azure', 'GCP', 'REST', 'GraphQL', 'Agile', 'Scrum', 'TDD', 'CI/CD'
+  ];
+  
+  const foundSkills: string[] = [];
+  const lowerText = text.toLowerCase();
+  
+  for (const skill of commonSkills) {
+    if (lowerText.includes(skill.toLowerCase())) {
+      foundSkills.push(skill);
+    }
+  }
+  
+  return foundSkills;
+}
+
+// Função para analisar compatibilidade
+export async function analyzeResumeCompatibility(
+  resume: ResumeData,
+  job: JobDescription
+): Promise<AnalysisResult> {
+  try {
+    const response = await fetch('/api/analyze-compatibility', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        resumeText: resume.extractedText,
+        jobDescription: job.description,
+        jobRequirements: job.requirements,
+        jobSkills: job.skills
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Erro na API de análise');
+    }
+
+    const result = await response.json();
+    
+    return {
+      id: `analysis-${Date.now()}`,
+      resumeId: resume.id,
+      jobId: job.id,
+      compatibilityScore: result.compatibilityScore || 75,
+      strengths: result.strengths || [
+        'Experiência relevante na área',
+        'Conhecimento das tecnologias principais',
+        'Formação adequada para a posição'
+      ],
+      weaknesses: result.weaknesses || [
+        'Falta experiência em algumas tecnologias específicas',
+        'Poderia destacar mais projetos práticos'
+      ],
+      improvements: result.improvements || [
+        'Adicionar mais detalhes sobre projetos realizados',
+        'Destacar resultados quantificáveis',
+        'Incluir certificações relevantes'
+      ],
+      createdAt: new Date()
+    };
+  } catch (error) {
+    console.error('Erro na análise de compatibilidade:', error);
+    
+    // Fallback: análise básica local
+    return {
+      id: `analysis-${Date.now()}`,
+      resumeId: resume.id,
+      jobId: job.id,
+      compatibilityScore: calculateBasicCompatibility(resume, job),
+      strengths: [
+        'Currículo bem estruturado',
+        'Experiência profissional relevante',
+        'Formação adequada'
+      ],
+      weaknesses: [
+        'Algumas habilidades específicas podem ser melhoradas',
+        'Poderia incluir mais detalhes sobre conquistas'
+      ],
+      improvements: [
+        'Destacar mais resultados quantificáveis',
+        'Incluir palavras-chave da vaga',
+        'Adicionar seção de projetos relevantes'
+      ],
+      createdAt: new Date()
+    };
+  }
+}
+
+// Cálculo básico de compatibilidade
+function calculateBasicCompatibility(resume: ResumeData, job: JobDescription): number {
+  const resumeText = resume.extractedText.toLowerCase();
+  let matches = 0;
+  const total = job.skills.length;
+  
+  for (const skill of job.skills) {
+    if (resumeText.includes(skill.toLowerCase())) {
+      matches++;
+    }
+  }
+  
+  return Math.round((matches / Math.max(total, 1)) * 100);
+}
+
+// Função para gerar currículo otimizado
+export async function generateOptimizedResume(
+  resume: ResumeData,
+  job: JobDescription,
+  analysis: AnalysisResult,
+  userProfile?: UserProfile
+): Promise<string> {
+  try {
+    const response = await fetch('/api/generate-optimized', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        resumeText: resume.extractedText,
+        jobTitle: job.title,
+        jobCompany: job.company,
+        jobRequirements: job.requirements,
+        jobSkills: job.skills,
+        analysisStrengths: analysis.strengths,
+        analysisImprovements: analysis.improvements,
+        userProfile
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Erro na API de geração');
+    }
+
+    const result = await response.json();
+    return result.optimizedResume || generateBasicOptimizedResume(resume, job, userProfile);
+  } catch (error) {
+    console.error('Erro na geração do currículo otimizado:', error);
+    return generateBasicOptimizedResume(resume, job, userProfile);
+  }
+}
+
+// Geração básica de currículo otimizado
+function generateBasicOptimizedResume(
+  resume: ResumeData,
+  job: JobDescription,
+  userProfile?: UserProfile
+): string {
+  const profile = userProfile || {};
+  
+  return `
+=== CURRÍCULO OTIMIZADO PARA: ${job.title} ===
+
+=== DADOS PESSOAIS ===
+Nome: ${profile.fullName || 'Seu Nome'}
+E-mail: ${profile.email || 'seu@email.com'}
+Telefone: ${profile.phone || '(11) 99999-9999'}
+Endereço: ${profile.address || 'Sua Cidade, UF'}
+
+=== OBJETIVO PROFISSIONAL ===
+Profissional experiente buscando oportunidade como ${job.title} na ${job.company}, 
+com foco em aplicar conhecimentos técnicos e contribuir para o crescimento da equipe.
+
+=== EXPERIÊNCIA PROFISSIONAL ===
+${profile.experience || 'Sua experiência profissional aqui...'}
+
+=== FORMAÇÃO ACADÊMICA ===
+${profile.education || 'Sua formação acadêmica aqui...'}
+
+=== HABILIDADES TÉCNICAS ===
+${profile.skills?.join(', ') || job.skills.join(', ')}
+
+=== CERTIFICAÇÕES ===
+${profile.certifications?.join('\n• ') || '• Suas certificações aqui...'}
+
+=== PROJETOS RELEVANTES ===
+${profile.projects?.join('\n• ') || '• Seus projetos aqui...'}
+
+=== DIFERENCIAIS ===
+• Experiência alinhada com os requisitos da vaga
+• Conhecimento das principais tecnologias solicitadas
+• Capacidade de trabalhar em equipe e entregar resultados
+• Foco em qualidade e melhoria contínua
+
+---
+Currículo otimizado para a vaga de ${job.title} - ${job.company}
+Gerado em: ${new Date().toLocaleDateString('pt-BR')}
+  `.trim();
+}
+
+// Função para extrair perfil do currículo - CORRIGIDA: Não retorna dados simulados
+export async function extractProfileFromResume(resumeText: string): Promise<Partial<UserProfile> | null> {
+  try {
+    const response = await fetch('/api/extract-profile', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ resumeText }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Erro na API de extração de perfil');
+    }
+
+    const result = await response.json();
+    return result.profile;
+  } catch (error) {
+    console.error('Erro na extração do perfil:', error);
+    
+    // Fallback: extração básica local - APENAS dados reais do texto
+    return extractBasicProfile(resumeText);
+  }
+}
+
+// Extração básica de perfil - CORRIGIDA: Só extrai dados reais do texto
+function extractBasicProfile(text: string): Partial<UserProfile> | null {
+  const profile: Partial<UserProfile> = {};
+  
+  // Verificar se o texto contém dados reais (não é simulação)
+  if (text.includes('Este é um texto simulado') || text.includes('Currículo em PDF carregado') || text.includes('Currículo em DOCX carregado')) {
+    // Se é texto simulado, não extrair nada
+    return null;
+  }
+  
+  // Extrair nome (primeira linha ou padrão comum)
+  const nameMatch = text.match(/^([A-ZÁÊÇÕ][a-záêçõ]+(?:\s+[A-ZÁÊÇÕ][a-záêçõ]+)+)/m);
+  if (nameMatch) {
+    profile.fullName = nameMatch[1].trim();
+  }
+  
+  // Extrair email
+  const emailMatch = text.match(/([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/);
+  if (emailMatch) {
+    profile.email = emailMatch[1];
+  }
+  
+  // Extrair telefone
+  const phoneMatch = text.match(/\(?\d{2}\)?\s*\d{4,5}-?\d{4}/);
+  if (phoneMatch) {
+    profile.phone = phoneMatch[0];
+  }
+  
+  // Extrair habilidades
+  const skillsSection = text.match(/(?:habilidades|competências|skills)[:\s]*([^]*?)(?:\n\n|\n[A-Z]|$)/i);
+  if (skillsSection) {
+    const skills = skillsSection[1]
+      .split(/[,\n•-]/)
+      .map(s => s.trim())
+      .filter(s => s && s.length > 2 && s.length < 50);
+    
+    if (skills.length > 0) {
+      profile.skills = skills;
+    }
+  }
+  
+  return Object.keys(profile).length > 0 ? profile : null;
+}
